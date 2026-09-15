@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
+  <title>DayLog</title>
+  <meta name="description" content="개인 다이어트 기록 — 식사·수분·운동·수면·체중·투약을 한 화면에서">
+  <meta name="theme-color" content="#FBF8F4">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="DayLog">
+  <link rel="manifest" href="./manifest.webmanifest">
+  <link rel="icon" href="./icons/icon-192.png">
+  <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png">
+  <link rel="stylesheet" href="./css/app.css">
+</head>
+<body>
+  <div id="app">
+    <main id="view" class="view"></main>
+    <nav id="tabs" class="tabs" aria-label="주요 화면">
+      <button class="tab" data-tab="today"><span class="tab-icon">☀️</span><span>오늘</span></button>
+      <button class="tab" data-tab="calendar"><span class="tab-icon">📅</span><span>달력</span></button>
+      <button class="tab" data-tab="trends"><span class="tab-icon">📈</span><span>변화</span></button>
+    </nav>
+  </div>
+  <div id="sheet-root"></div>
+  <div id="toast-root"></div>
+  <script type="module" src="./js/app.js"></script>
+</body>
+</html>
