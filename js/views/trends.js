@@ -33,6 +33,11 @@ export async function renderTrends(root, ctx) {
   const injMarkers = docs.map((d, i) => (d?.injection ? { index: i, label: `${d.injection.doseMg}mg` } : null)).filter(Boolean);
   const wVals = weight.filter((v) => v != null);
 
+  // 체성분 (인바디)
+  const muscle = docs.map((d) => d?.weight?.muscle ?? null);
+  const fatPct = docs.map((d) => d?.weight?.bodyFat ?? null);
+  const hasComp = muscle.some((v) => v != null) || fatPct.some((v) => v != null);
+
   // 에너지
   const intake = docs.map((d) => (d && d.meals.length ? energyOf(d, m.settings).intake : null));
   const expend = docs.map((d) => (d && (d.meals.length || d.exercise.length || d.energy) ? energyOf(d, m.settings).expenditure : null));
@@ -56,6 +61,14 @@ export async function renderTrends(root, ctx) {
       { values: weight, color: '#F5C2CC', width: 1.5, dots: true },
       { values: avg7, color: '#F07A8F', width: 3 },
     ], markers: injMarkers }), '연한 선: 일별 · 진한 선: 7일 평균 · 점선: 투약일'),
+
+    hasComp && chartCard('📋 체성분 (인바디)', [
+      ['골격근량', muscle.filter((v) => v != null).slice(-1)[0] != null ? `${muscle.filter((v) => v != null).slice(-1)[0]} kg` : '-'],
+      ['체지방률', fatPct.filter((v) => v != null).slice(-1)[0] != null ? `${fatPct.filter((v) => v != null).slice(-1)[0]} %` : '-'],
+    ], lineChart({ labels, series: [
+      { values: muscle, color: '#6CC3A5', width: 2.5, dots: true },
+      { values: fatPct, color: '#F5B84D', width: 2.5, dots: true },
+    ] }), '초록: 골격근량(kg) · 노랑: 체지방률(%)'),
 
     chartCard('🔥 에너지', [
       ['평균 섭취', avg(intake) ? `${Math.round(avg(intake))} kcal` : '-'],

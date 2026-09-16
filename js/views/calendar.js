@@ -28,6 +28,7 @@ export async function renderCalendar(root, ctx) {
     const icons = [
       ...(d ? d.tags.slice(0, 2).map((t) => tagById[t.tagId]?.icon ?? '') : []),
       d?.injection ? '💉' : (isNext ? '⏰' : ''),
+      d?.weight?.source === 'inbody' ? '📋' : '',
     ].join('');
     const cls = ['cal-cell', !c.inMonth && 'out', c.key === today && 'today', rating && `r${rating}`, d?.injection && 'inj', isNext && 'inj-next'].filter(Boolean).join(' ');
     return h('div', { class: cls, onclick: () => { ctx.setDay(c.key); ctx.goTab('today'); } },
@@ -48,7 +49,7 @@ export async function renderCalendar(root, ctx) {
       DOW.map((d) => h('div', { class: 'cal-dow' }, d)),
       cells),
     h('div', { class: 'cal-legend' },
-      RATINGS.map((r) => h('span', null, `${r.face} ${r.label}`)), h('span', null, '💉 투약'), h('span', null, '⏰ 투약 예정')),
+      RATINGS.map((r) => h('span', null, `${r.face} ${r.label}`)), h('span', null, '💉 투약'), h('span', null, '⏰ 투약 예정'), h('span', null, '📋 인바디')),
 
     // 투약 카드
     h('div', { class: 'card', style: 'margin-top:12px' },

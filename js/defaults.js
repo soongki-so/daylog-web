@@ -23,6 +23,13 @@ export const RATINGS = [
   { v: 5, face: '😄', label: '최고' },
 ];
 
+export const MED_SLOTS = [
+  { key: 'breakfast', label: '아침', icon: '🌅' },
+  { key: 'lunch', label: '점심', icon: '☀️' },
+  { key: 'dinner', label: '저녁', icon: '🌙' },
+  { key: 'bedtime', label: '취침 전', icon: '🛏️' },
+];
+
 export const EXERCISE_TYPES = ['걷기', '러닝', '헬스', 'PT', '자전거', '수영', '요가/필라테스', '등산', '기타'];
 
 export const DEFAULT_MASTERS = {
@@ -35,8 +42,8 @@ export const DEFAULT_MASTERS = {
     { id: 'p_out', name: '외식', items: '', kcal: 900, mealType: null, favorite: false, order: 5 },
   ],
   medications: [
-    { id: 'm_vita', name: '종합비타민', kind: 'supplement', dose: '1정', active: true, order: 1 },
-    { id: 'm_omega', name: '오메가3', kind: 'supplement', dose: '1정', active: true, order: 2 },
+    { id: 'm_vita', name: '종합비타민', kind: 'supplement', dose: '1정', slots: ['breakfast'], active: true, order: 1 },
+    { id: 'm_omega', name: '오메가3', kind: 'supplement', dose: '1정', slots: ['breakfast', 'dinner'], active: true, order: 2 },
   ],
   tags: [
     { id: 't_period', name: '생리', icon: '🩸', active: true, order: 1 },

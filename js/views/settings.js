@@ -1,7 +1,7 @@
 // 설정: 프리셋 / 약·영양제 / 특이사항 태그 / 목표 / 데이터 백업
 import { h, openSheet, toast, numOr, field, input, select } from '../ui.js';
 import { getMasters, updateMasters, exportAll, importAll, resetAll, uid } from '../store.js';
-import { MEAL_TYPES } from '../defaults.js';
+import { MEAL_TYPES, MED_SLOTS } from '../defaults.js';
 
 export async function renderSettings(root, ctx) {
   const m = await getMasters();
@@ -16,7 +16,7 @@ export async function renderSettings(root, ctx) {
       () => presetSheet(m, null)),
 
     section('💊 약 · 영양제', '매일 체크할 항목', m.medications.sort((a, b) => a.order - b.order).map((x) =>
-      item(x.name, `${x.kind === 'medication' ? '약' : '영양제'}${x.dose ? ' · ' + x.dose : ''}${x.active ? '' : ' · 숨김'}`, () => medSheet(m, x))),
+      item(x.name, `${x.kind === 'medication' ? '약' : '영양제'}${x.dose ? ' · ' + x.dose : ''} · ${(x.slots?.length ? x.slots : ['breakfast']).map((k) => MED_SLOTS.find((s) => s.key === k)?.label ?? k).join('/')}${x.active ? '' : ' · 숨김'}`, () => medSheet(m, x))),
       () => medSheet(m, null)),
 
     section('🏷️ 특이사항 태그', '', m.tags.sort((a, b) => a.order - b.order).map((t) =>
@@ -72,17 +72,23 @@ function medSheet(m, x) {
   const kind = select([{ value: 'supplement', label: '영양제' }, { value: 'medication', label: '약' }], x?.kind ?? 'supplement');
   const dose = input({ type: 'text', value: x?.dose ?? '', placeholder: '예: 1정 (선택)' });
   const active = h('input', { type: 'checkbox', checked: x ? x.active : true });
+  const cur = new Set(x?.slots?.length ? x.slots : ['breakfast']);
+  const slotBoxes = MED_SLOTS.map((sl) => ({ key: sl.key, box: h('input', { type: 'checkbox', checked: cur.has(sl.key) }), label: `${sl.icon} ${sl.label}` }));
   openSheet({
     title: x ? '약·영양제 수정' : '약·영양제 추가',
     render: (sh) => h('div', null,
       field('이름', name),
       h('div', { class: 'grid2' }, field('구분', kind), field('용량', dose)),
+      h('div', { class: 'field' }, h('label', null, '먹는 때 (여러 개 가능)'),
+        h('div', { class: 'chips' }, slotBoxes.map((b) => h('label', { class: 'chip' }, b.box, ' ', b.label)))),
       h('label', { class: 'row', style: 'margin-bottom:14px' }, active, ' 오늘 화면에 표시'),
       h('div', { class: 'row' },
         x && h('button', { class: 'btn danger', onclick: async () => { if (!confirm('삭제할까요? 과거 체크 기록은 남습니다.')) return; await updateMasters((mm) => { mm.medications = mm.medications.filter((y) => y.id !== x.id); }); sh.close(); } }, '삭제'),
         h('button', { class: 'btn grow', onclick: async () => {
           if (!name.value.trim()) return toast('이름을 입력하세요');
-          const rec = { id: x?.id ?? uid(), name: name.value.trim(), kind: kind.value, dose: dose.value.trim() || null, active: active.checked, order: x?.order ?? (m.medications.length + 1) };
+          const slots = slotBoxes.filter((b) => b.box.checked).map((b) => b.key);
+          if (!slots.length) return toast('먹는 때를 하나 이상 고르세요');
+          const rec = { id: x?.id ?? uid(), name: name.value.trim(), kind: kind.value, dose: dose.value.trim() || null, slots, active: active.checked, order: x?.order ?? (m.medications.length + 1) };
           await updateMasters((mm) => { const i = mm.medications.findIndex((y) => y.id === rec.id); if (i >= 0) mm.medications[i] = rec; else mm.medications.push(rec); });
           sh.close();
         } }, '저장'))),
