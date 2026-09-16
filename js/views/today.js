@@ -1,8 +1,10 @@
-// 오늘 화면: 통합 대시보드 → 식사 → 약·영양제 → 투약 → 특이사항 → 하루평가
+// 오늘 화면: 통합 대시보드 → 식사 → 약·영양제 → 특이사항 → 하루평가 (투약은 달력에서)
 import { h, openSheet, toast, ring, fmtKcal, numOr, field, input, select } from '../ui.js';
 import { getDay, updateDay, getMasters, getDaysInRange, uid } from '../store.js';
 import { fmtKey, addDays, todayKey, nowHM, minutesToText, sleepMinutes } from '../date.js';
 import { MEAL_TYPES, SATIETY, RATINGS, EXERCISE_TYPES } from '../defaults.js';
+import { searchFoods } from '../foods.js';
+import { getAllDays } from '../store.js';
 
 export async function renderToday(root, ctx) {
   const [doc, m] = await Promise.all([getDay(ctx.day), getMasters()]);
@@ -12,7 +14,6 @@ export async function renderToday(root, ctx) {
     dashboard(doc, m, ctx, prevWeight),
     mealsSection(doc, m, ctx),
     medsSection(doc, m, ctx),
-    injectionSection(doc, m, ctx),
     tagsSection(doc, m, ctx),
     ratingSection(doc, ctx),
   );
@@ -229,10 +230,46 @@ function mealsSection(doc, m, ctx) {
       })));
 }
 
+// 내가 전에 기록한 음식(칼로리 있는 것) — 최근 것 우선, 이름당 1개
+let historyCache = null;
+async function foodHistory() {
+  if (historyCache) return historyCache;
+  const days = (await getAllDays()).sort((a, b) => (a.day < b.day ? 1 : -1));
+  const seen = new Map();
+  for (const d of days) for (const x of d.meals) if (x.kcal && !seen.has(x.name)) seen.set(x.name, { name: x.name, kcal: x.kcal });
+  historyCache = [...seen.values()];
+  setTimeout(() => { historyCache = null; }, 60_000);
+  return historyCache;
+}
+
 function mealSheet(doc, m, ctx, type) {
   let editing = null; // 수정 중인 항목
-  const name = input({ type: 'text', placeholder: '음식 이름' });
+  const name = input({ type: 'text', placeholder: '음식 이름 (예: 김밥, 라떼)', autocomplete: 'off' });
   const kcal = input({ type: 'number', inputmode: 'numeric', placeholder: 'kcal' });
+  const suggest = h('div', { class: 'suggest', hidden: true });
+  let history = [];
+  foodHistory().then((hh) => { history = hh; });
+  let sTimer;
+  const showSuggest = () => {
+    const list = searchFoods(name.value, history);
+    suggest.replaceChildren(...list.map((f) => h('button', { class: 'suggest-item', onpointerdown: (e) => e.preventDefault(), onclick: () => {
+      name.value = f.name; kcal.value = f.kcal; suggest.replaceChildren(); kcal.focus();
+    } },
+      h('span', { class: 'grow' }, f.mine ? '★ ' : '', f.name),
+      h('span', { class: 'muted small' }, f.serving),
+      h('b', null, `${f.kcal}`))));
+    suggest.hidden = list.length === 0;
+  };
+  name.addEventListener('input', () => { clearTimeout(sTimer); sTimer = setTimeout(showSuggest, 120); });
+  name.addEventListener('focus', showSuggest);
+  name.addEventListener('blur', () => setTimeout(() => {
+    // 이름만 치고 넘어가면 정확히 같은 이름의 칼로리를 채워 줌
+    if (!kcal.value && name.value.trim()) {
+      const exact = searchFoods(name.value, history, 1)[0];
+      if (exact && exact.name.replace(/\s+/g, '') === name.value.trim().replace(/\s+/g, '')) kcal.value = exact.kcal;
+    }
+    suggest.replaceChildren(); suggest.hidden = true;
+  }, 150));
   const note = input({ type: 'text', placeholder: '메모 (선택)' });
   let satiety = null, presetId = null;
 
@@ -261,7 +298,9 @@ function mealSheet(doc, m, ctx, type) {
           presets.map((p) => h('button', { class: 'chip' + (presetId === p.id ? ' on' : ''), onclick: () => {
             presetId = p.id; name.value = p.name; kcal.value = p.kcal ?? ''; sh.refresh();
           } }, p.favorite ? '★ ' : '', p.name, p.kcal ? h('span', { class: 'muted' }, ` ${p.kcal}`) : null))),
-        h('div', { class: 'row', style: 'margin-bottom:10px' }, name, h('div', { style: 'width:110px' }, kcal)),
+        h('div', { class: 'row', style: 'margin-bottom:4px' }, name, h('div', { style: 'width:100px' }, kcal)),
+        suggest,
+        h('div', { class: 'muted small', style: 'margin-bottom:10px' }, '이름을 치면 칼로리 후보가 떠요. ★는 내가 전에 기록한 것'),
         h('div', { class: 'field' }, h('label', null, '포만감'), satRow),
         field('메모', note),
         h('div', { class: 'row' },
@@ -270,7 +309,7 @@ function mealSheet(doc, m, ctx, type) {
             if (!name.value.trim()) return toast('음식 이름을 입력하세요');
             const rec = { id: editing?.id ?? uid(), at: editing?.at ?? nowHM(), type: type.key, presetId, name: name.value.trim(), kcal: numOr(kcal.value), satiety, note: note.value.trim() || null, source: 'manual' };
             await updateDay(ctx.day, (d) => { const i = d.meals.findIndex((y) => y.id === rec.id); if (i >= 0) d.meals[i] = rec; else d.meals.push(rec); });
-            doc = await getDay(ctx.day); resetForm(); sh.refresh(); toast('저장했어요');
+            doc = await getDay(ctx.day); historyCache = null; foodHistory().then((hh) => { history = hh; }); resetForm(); sh.refresh(); toast('저장했어요');
           } }, editing ? '수정 저장' : '기록')));
     },
   });
@@ -289,43 +328,6 @@ function medsSection(doc, m, ctx) {
         h('span', { class: 'grow' }, x.name, x.dose ? h('span', { class: 'muted small' }, ` ${x.dose}`) : null),
         on && doc.meds[x.id].at ? h('span', { class: 'muted small' }, doc.meds[x.id].at) : null);
     }) : h('div', { class: 'empty' }, '설정에서 매일 챙길 약·영양제를 등록하세요'));
-}
-
-// ---------- 투약 (마운자로) ----------
-function injectionSection(doc, m, ctx) {
-  const name = m.settings.injectionName;
-  const inj = doc.injection;
-  return h('div', { class: 'card' },
-    h('div', { class: 'card-title' }, h('span', null, `💉 ${name}`), inj && h('button', { class: 'link', onclick: () => injectionSheet(doc, m, ctx) }, '수정')),
-    inj
-      ? h('div', { class: 'row' }, h('b', { style: 'font-size:18px' }, `${inj.doseMg} mg`), h('span', { class: 'muted small' }, inj.at), inj.note && h('span', { class: 'muted small grow' }, `· ${inj.note}`))
-      : h('button', { class: 'btn secondary block', onclick: () => injectionSheet(doc, m, ctx) }, `+ 오늘 ${name} 투약 기록`));
-}
-
-function injectionSheet(doc, m, ctx) {
-  const dose = input({ type: 'number', step: '0.5', inputmode: 'decimal', value: doc.injection?.doseMg ?? m.settings.injectionDefaultMg });
-  const at = input({ type: 'time', value: doc.injection?.at ?? nowHM() });
-  const note = input({ type: 'text', value: doc.injection?.note ?? '', placeholder: '부위, 증상 등 (선택)' });
-  openSheet({
-    title: `${m.settings.injectionName} 투약`,
-    render: (sh) => h('div', null,
-      h('div', { class: 'grid2' }, field('용량 (mg)', dose), field('시각', at)),
-      field('메모', note),
-      h('div', { class: 'row' },
-        doc.injection && h('button', { class: 'btn danger', onclick: async () => { await updateDay(ctx.day, (d) => { d.injection = null; }); sh.close(); } }, '삭제'),
-        h('button', { class: 'btn grow', onclick: async () => {
-          const v = numOr(dose.value); if (!v) return toast('용량을 입력하세요');
-          await updateDay(ctx.day, (d) => { d.injection = { doseMg: v, at: at.value, note: note.value.trim() || null }; });
-          await updateMastersDefault(m, v);
-          sh.close();
-        } }, '저장'))),
-  });
-}
-
-async function updateMastersDefault(m, mg) {
-  if (m.settings.injectionDefaultMg === mg) return;
-  const { updateMasters } = await import('../store.js');
-  await updateMasters((mm) => { mm.settings.injectionDefaultMg = mg; });
 }
 
 // ---------- 특이사항 ----------
