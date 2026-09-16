@@ -117,8 +117,8 @@ function shrinkImage(file, max = 1400) {
   });
 }
 
-function photoViewer(src) {
-  openSheet({ title: '인바디 결과지', render: () => h('img', { src, style: 'width:100%;border-radius:12px' }) });
+function photoViewer(src, title = '인바디 결과지') {
+  openSheet({ title, render: () => h('img', { src, style: 'width:100%;border-radius:12px' }) });
 }
 
 function weightSheet(doc, ctx) {
@@ -288,12 +288,12 @@ function mealsSection(doc, m, ctx) {
         const sat = entries.map((x) => x.satiety).filter(Boolean);
         const satFace = sat.length ? SATIETY.find((s) => s.v === Math.round(sat.reduce((a, b) => a + b, 0) / sat.length))?.face : '';
         const slotMeds = m.medications.filter((x) => x.active && medSlotsOf(x).includes(t.key));
-        const slotTaken = slotMeds.filter((x) => isTaken(doc, x.id, t.key)).length;
         return h('div', { class: 'meal-slot' + (entries.length ? ' filled' : ''), onclick: () => mealSheet(doc, m, ctx, t) },
-          h('div', { class: 't' }, `${t.icon} ${t.label}`, slotMeds.length ? h('span', { class: 'med-badge' + (slotTaken === slotMeds.length ? ' done' : '') }, `💊${slotTaken}/${slotMeds.length}`) : null),
+          h('div', { class: 't' }, `${t.icon} ${t.label}`, slotMeds.length ? h('span', { class: 'med-dots' }, slotMeds.map((x) => medDot(x, isTaken(doc, x.id, t.key)))) : null),
           entries.length
             ? [h('div', { class: 'n' }, entries.map((x) => x.name).join(', ')),
-               h('div', { class: 'k' }, `${kcal ? fmtKcal(kcal) + ' kcal ' : ''}${satFace}`)]
+               h('div', { class: 'k' }, `${kcal ? fmtKcal(kcal) + ' kcal ' : ''}${satFace}`),
+               entries.some((x) => x.photo) && h('div', { class: 'thumbs' }, entries.filter((x) => x.photo).slice(0, 3).map((x) => h('img', { src: x.photo, class: 'thumb' })))]
             : h('div', { class: 'add' }, '+'));
       })));
 }
@@ -328,7 +328,10 @@ function mealSheet(doc, m, ctx, type) {
       h('b', null, `${f.kcal}`))));
     suggest.hidden = list.length === 0;
   };
-  name.addEventListener('input', () => { clearTimeout(sTimer); sTimer = setTimeout(showSuggest, 120); });
+  name.addEventListener('input', () => {
+    clearTimeout(sTimer); sTimer = setTimeout(showSuggest, 120);
+    const b = document.getElementById('meal-save-btn'); if (b && !editing) b.textContent = name.value.trim() ? '기록' : '닫기';
+  });
   name.addEventListener('focus', showSuggest);
   name.addEventListener('blur', () => setTimeout(() => {
     // 이름만 치고 넘어가면 정확히 같은 이름의 칼로리를 채워 줌
@@ -339,21 +342,28 @@ function mealSheet(doc, m, ctx, type) {
     suggest.replaceChildren(); suggest.hidden = true;
   }, 150));
   const note = input({ type: 'text', placeholder: '메모 (선택)' });
-  let satiety = null, presetId = null;
+  let satiety = null, presetId = null, photo = null;
+  const photoIn = h('input', { type: 'file', accept: 'image/*', style: 'display:none' });
 
   const presets = [...m.presets].sort((a, b) => (b.favorite - a.favorite) || (a.order - b.order));
 
-  const resetForm = () => { editing = null; name.value = ''; kcal.value = ''; note.value = ''; satiety = null; presetId = null; };
-  const loadForm = (x) => { editing = x; name.value = x.name; kcal.value = x.kcal ?? ''; note.value = x.note ?? ''; satiety = x.satiety ?? null; presetId = x.presetId ?? null; };
+  const resetForm = () => { editing = null; name.value = ''; kcal.value = ''; note.value = ''; satiety = null; presetId = null; photo = null; };
+  const loadForm = (x) => { editing = x; name.value = x.name; kcal.value = x.kcal ?? ''; note.value = x.note ?? ''; satiety = x.satiety ?? null; presetId = x.presetId ?? null; photo = x.photo ?? null; };
 
   openSheet({
     title: `${type.icon} ${type.label}`,
     render: (sh) => {
       const entries = doc.meals.filter((x) => x.type === type.key);
+      photoIn.onchange = async (e) => {
+        const f = e.target.files[0]; if (!f) return;
+        try { photo = await shrinkImage(f, 1000); sh.refresh(); } catch { toast('사진을 읽지 못했어요'); }
+        e.target.value = '';
+      };
       const satRow = h('div', { class: 'faces' },
         SATIETY.map((s) => h('button', { class: 'face sm' + (satiety === s.v ? ' on' : ''), onclick: () => { satiety = satiety === s.v ? null : s.v; sh.refresh(); } }, s.face, h('span', null, s.label))));
       return h('div', null,
         entries.length ? h('div', { style: 'margin-bottom:12px' }, entries.map((x) => h('div', { class: 'list-item' },
+          x.photo && h('img', { src: x.photo, class: 'thumb lg', onclick: () => photoViewer(x.photo, x.name) }),
           h('div', { class: 'grow', onclick: () => { loadForm(x); sh.refresh(); } },
             h('div', null, x.name, ' ', x.satiety ? SATIETY.find((s) => s.v === x.satiety)?.face : ''),
             h('div', { class: 'muted small' }, [x.kcal ? `${x.kcal} kcal` : null, x.at, x.note].filter(Boolean).join(' · '))),
@@ -372,14 +382,22 @@ function mealSheet(doc, m, ctx, type) {
         h('div', { class: 'muted small', style: 'margin-bottom:10px' }, '이름을 치면 칼로리 후보가 떠요. ★는 내가 전에 기록한 것'),
         h('div', { class: 'field' }, h('label', null, '포만감'), satRow),
         field('메모', note),
+        h('div', { class: 'row', style: 'margin-bottom:12px' },
+          photo
+            ? [h('img', { src: photo, class: 'thumb lg', onclick: () => photoViewer(photo) }),
+               h('button', { class: 'btn secondary sm', onclick: () => photoIn.click() }, '사진 바꾸기'),
+               h('button', { class: 'btn danger sm', onclick: () => { photo = null; sh.refresh(); } }, '지우기')]
+            : h('button', { class: 'btn secondary sm', onclick: () => photoIn.click() }, '📷 사진 붙이기 (선택)'),
+          photoIn),
         h('div', { class: 'row' },
           editing && h('button', { class: 'btn secondary', onclick: () => { resetForm(); sh.refresh(); } }, '취소'),
-          h('button', { class: 'btn grow', onclick: async () => {
-            if (!name.value.trim()) return toast('음식 이름을 입력하세요');
-            const rec = { id: editing?.id ?? uid(), at: editing?.at ?? nowHM(), type: type.key, presetId, name: name.value.trim(), kcal: numOr(kcal.value), satiety, note: note.value.trim() || null, source: 'manual' };
+          h('button', { class: 'btn grow', id: 'meal-save-btn', onclick: async () => {
+            if (!name.value.trim()) { sh.close(); return; }
+            const rec = { id: editing?.id ?? uid(), at: editing?.at ?? nowHM(), type: type.key, presetId, name: name.value.trim(), kcal: numOr(kcal.value), satiety, note: note.value.trim() || null, photo, source: 'manual' };
             await updateDay(ctx.day, (d) => { const i = d.meals.findIndex((y) => y.id === rec.id); if (i >= 0) d.meals[i] = rec; else d.meals.push(rec); });
             doc = await getDay(ctx.day); historyCache = null; foodHistory().then((hh) => { history = hh; }); resetForm(); sh.refresh(); toast('저장했어요');
-          } }, editing ? '수정 저장' : '기록')));
+          } }, editing ? '수정 저장' : (name.value.trim() ? '기록' : '닫기'))),
+        h('div', { class: 'muted small', style: 'margin-top:8px;text-align:center' }, '약·영양제 칩은 누르는 즉시 저장돼요. 음식 없이 닫아도 됩니다.'));
     },
   });
 }
@@ -397,6 +415,10 @@ export function toggleMed(day, medId, slot) {
   });
 }
 
+export function medDot(x, on) {
+  return h('span', { class: 'pill-dot ' + (x.kind === 'medication' ? 'med' : 'sup') + (on ? ' on' : ''), title: x.name });
+}
+
 function medRow(doc, ctx, x, slot) {
   const on = isTaken(doc, x.id, slot);
   const at = doc.meds[x.id]?.[slot]?.at;
@@ -406,17 +428,47 @@ function medRow(doc, ctx, x, slot) {
     on && at ? h('span', { class: 'muted small' }, at) : null);
 }
 
-function medsSection(doc, m, ctx) {
+function medGroups(doc, m) {
   const meds = m.medications.filter((x) => x.active).sort((a, b) => a.order - b.order);
-  const groups = MED_SLOTS.map((sl) => ({ ...sl, meds: meds.filter((x) => medSlotsOf(x).includes(sl.key)) })).filter((g) => g.meds.length);
-  const total = groups.reduce((a, g) => a + g.meds.length, 0);
-  const taken = groups.reduce((a, g) => a + g.meds.filter((x) => isTaken(doc, x.id, g.key)).length, 0);
-  return h('div', { class: 'card' },
-    h('div', { class: 'card-title' }, h('span', null, '💊 약 · 영양제'), h('span', null, total ? `${taken}/${total}` : '')),
-    groups.length ? groups.map((g) => h('div', { class: 'med-group' },
-      h('div', { class: 'med-group-title' }, `${g.icon} ${g.label}`),
-      g.meds.map((x) => medRow(doc, ctx, x, g.key))))
-      : h('div', { class: 'empty' }, '설정에서 매일 챙길 약·영양제와 먹는 때를 등록하세요'));
+  return MED_SLOTS.map((sl) => ({ ...sl, meds: meds.filter((x) => medSlotsOf(x).includes(sl.key)) })).filter((g) => g.meds.length);
+}
+
+// 오늘 화면: 한 줄 요약 (누르면 세부 시트)
+function medsSection(doc, m, ctx) {
+  const groups = medGroups(doc, m);
+  if (!groups.length) return h('div', { class: 'card compact', onclick: () => ctx.goTab('settings') },
+    h('span', null, '💊 약 · 영양제'), h('span', { class: 'muted small grow', style: 'text-align:right' }, '설정에서 등록 ›'));
+  return h('div', { class: 'card compact', onclick: () => medsSheet(doc, m, ctx) },
+    h('span', null, '💊 약 · 영양제'),
+    h('span', { class: 'grow row', style: 'justify-content:flex-end;gap:10px;flex-wrap:wrap' },
+      groups.map((g) => h('span', { class: 'med-dots' }, h('span', { class: 'muted small' }, g.icon), g.meds.map((x) => medDot(x, isTaken(doc, x.id, g.key)))))),
+    h('span', { class: 'muted' }, '›'));
+}
+
+function medsSheet(doc, m, ctx) {
+  openSheet({
+    title: '💊 약 · 영양제',
+    render: (sh) => {
+      const groups = medGroups(doc, m);
+      const rows = groups.map((g) => h('div', { class: 'med-group' },
+        h('div', { class: 'med-group-title' }, `${g.icon} ${g.label}`),
+        g.meds.map((x) => {
+          const on = isTaken(doc, x.id, g.key);
+          const at = doc.meds[x.id]?.[g.key]?.at;
+          return h('div', { class: 'med-row', onclick: async () => { await toggleMed(ctx.day, x.id, g.key); doc = await getDay(ctx.day); sh.refresh(); } },
+            medDot(x, on),
+            h('span', { class: 'grow' }, x.name, x.dose ? h('span', { class: 'muted small' }, ` ${x.dose}`) : null),
+            on && at ? h('span', { class: 'muted small' }, at) : h('span', { class: 'muted small' }, on ? '' : '안 먹음'));
+        })));
+      return h('div', null,
+        h('div', { class: 'row muted small', style: 'gap:14px;margin-bottom:8px' },
+          h('span', { class: 'row', style: 'gap:4px' }, h('span', { class: 'pill-dot med on' }), '약'),
+          h('span', { class: 'row', style: 'gap:4px' }, h('span', { class: 'pill-dot sup on' }), '영양제'),
+          h('span', { class: 'row', style: 'gap:4px' }, h('span', { class: 'pill-dot sup' }), '안 먹음')),
+        rows,
+        h('button', { class: 'btn secondary block', style: 'margin-top:12px', onclick: () => { sh.close(); ctx.goTab('settings'); } }, '약·영양제 목록 수정 (설정)'));
+    },
+  });
 }
 
 // 식사 시트 안: 이 끼니와 함께 먹는 약 칩
@@ -427,8 +479,8 @@ function mealMedsRow(doc, m, ctx, slot, onToggle) {
     h('label', null, '💊 이 끼니와 함께'),
     h('div', { class: 'chips' }, meds.map((x) => {
       const on = isTaken(doc, x.id, slot);
-      return h('button', { class: 'chip' + (on ? ' on' : ''), onclick: async () => { await toggleMed(ctx.day, x.id, slot); onToggle?.(); } },
-        on ? '✓ ' : '', x.name);
+      return h('button', { class: 'chip pill ' + (x.kind === 'medication' ? 'med' : 'sup') + (on ? ' on' : ''), onclick: async () => { await toggleMed(ctx.day, x.id, slot); toast(on ? `${x.name} 체크 해제` : `${x.name} 먹었어요`); onToggle?.(); } },
+        medDot(x, on), ' ', x.name);
     })));
 }
 

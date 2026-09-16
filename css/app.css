@@ -125,8 +125,16 @@ hr.sep { border: 0; border-top: 1px solid var(--line); margin: 12px 0; }
 /* ---------- 오늘: 약 / 투약 / 태그 / 평가 ---------- */
 .med-group { margin-bottom: 6px; }
 .med-group-title { font-size: 12px; color: var(--muted); font-weight: 600; margin: 6px 0 2px; }
-.med-badge { margin-left: auto; font-size: 10px; font-weight: 600; color: var(--muted); background: #fff; border-radius: 99px; padding: 1px 6px; }
-.med-badge.done { color: #2F8F6A; background: var(--mint-soft); }
+.pill-dot { display: inline-block; width: 11px; height: 11px; border-radius: 50%; border: 2px solid; box-sizing: border-box; background: transparent; flex: none; }
+.pill-dot.med { border-color: #E05656; } .pill-dot.med.on { background: #E05656; }
+.pill-dot.sup { border-color: #3FA97B; } .pill-dot.sup.on { background: #3FA97B; }
+.med-dots { display: inline-flex; align-items: center; gap: 4px; margin-left: auto; }
+.chip.pill.on.med { background: #FDECEC; border-color: #E05656; color: #B03A3A; }
+.chip.pill.on.sup { background: var(--mint-soft); border-color: #3FA97B; color: #24784F; }
+.card.compact { display: flex; align-items: center; gap: 10px; padding: 12px 16px; cursor: pointer; font-weight: 600; font-size: 14px; }
+.thumb { width: 34px; height: 34px; object-fit: cover; border-radius: 8px; }
+.thumb.lg { width: 56px; height: 56px; border-radius: 10px; }
+.thumbs { display: flex; gap: 4px; margin-top: 2px; }
 .meal-slot .t { display: flex; align-items: center; }
 .med-row { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--line); cursor: pointer; }
 .med-row:last-child { border-bottom: 0; }
