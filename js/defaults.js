@@ -41,9 +41,12 @@ export const DEFAULT_MASTERS = {
     { id: 'p_normal', name: '일반식', items: '밥, 국, 반찬', kcal: 700, mealType: null, favorite: false, order: 4 },
     { id: 'p_out', name: '외식', items: '', kcal: 900, mealType: null, favorite: false, order: 5 },
   ],
-  medications: [
-    { id: 'm_vita', name: '종합비타민', kind: 'supplement', dose: '1정', slots: ['breakfast'], active: true, order: 1 },
-    { id: 'm_omega', name: '오메가3', kind: 'supplement', dose: '1정', slots: ['breakfast', 'dinner'], active: true, order: 2 },
+  medications: [],
+  medSets: [
+    { id: 's_med_am', name: '아침약', kind: 'medication', slots: ['breakfast'], active: true, order: 1,
+      items: [{ id: 'i_synth', name: '신지로이드' }, { id: 'i_bp', name: '혈압약' }] },
+    { id: 's_supp', name: '영양제', kind: 'supplement', slots: ['breakfast'], active: true, order: 2,
+      items: [{ id: 'i_dx', name: '더블엑스' }, { id: 'i_slim', name: '슬림팩' }, { id: 'i_pro', name: '유산균' }] },
   ],
   tags: [
     { id: 't_period', name: '생리', icon: '🩸', active: true, order: 1 },

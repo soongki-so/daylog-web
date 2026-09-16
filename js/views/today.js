@@ -2,7 +2,8 @@
 import { h, openSheet, toast, ring, fmtKcal, numOr, field, input, select, inbodyCsvPicker } from '../ui.js';
 import { getDay, updateDay, getMasters, getDaysInRange, uid } from '../store.js';
 import { fmtKey, addDays, todayKey, nowHM, minutesToText, sleepMinutes } from '../date.js';
-import { MEAL_TYPES, SATIETY, RATINGS, EXERCISE_TYPES, MED_SLOTS } from '../defaults.js';
+import { MEAL_TYPES, SATIETY, RATINGS, EXERCISE_TYPES } from '../defaults.js';
+import { slotGroups, setsForSlot, pieFor, setRow, medsSheet } from '../meds.js';
 import { searchFoods } from '../foods.js';
 import { getAllDays } from '../store.js';
 
@@ -285,14 +286,13 @@ function mealsSection(doc, m, ctx) {
       MEAL_TYPES.map((t) => {
         const entries = doc.meals.filter((x) => x.type === t.key);
         const kcal = entries.reduce((a, x) => a + (x.kcal ?? 0), 0);
-        const sat = entries.map((x) => x.satiety).filter(Boolean);
-        const satFace = sat.length ? SATIETY.find((s) => s.v === Math.round(sat.reduce((a, b) => a + b, 0) / sat.length))?.face : '';
-        const slotMeds = m.medications.filter((x) => x.active && medSlotsOf(x).includes(t.key));
+        const faceOf = (x) => (x.satiety ? SATIETY.find((s) => s.v === x.satiety)?.face ?? '' : '');
+        const slotSets = setsForSlot(m, t.key);
         return h('div', { class: 'meal-slot' + (entries.length ? ' filled' : ''), onclick: () => mealSheet(doc, m, ctx, t) },
-          h('div', { class: 't' }, `${t.icon} ${t.label}`, slotMeds.length ? h('span', { class: 'med-dots' }, slotMeds.map((x) => medDot(x, isTaken(doc, x.id, t.key)))) : null),
+          h('div', { class: 't' }, `${t.icon} ${t.label}`, slotSets.length ? h('span', { class: 'med-dots' }, slotSets.map((set) => pieFor(doc, set, t.key, 14))) : null),
           entries.length
-            ? [h('div', { class: 'n' }, entries.map((x) => x.name).join(', ')),
-               h('div', { class: 'k' }, `${kcal ? fmtKcal(kcal) + ' kcal ' : ''}${satFace}`),
+            ? [h('div', { class: 'n' }, entries.map((x, i) => [i ? ', ' : '', x.name, faceOf(x) ? h('span', { class: 'sat-face' }, ' ' + faceOf(x)) : null])),
+               h('div', { class: 'k' }, kcal ? `${fmtKcal(kcal)} kcal` : ''),
                entries.some((x) => x.photo) && h('div', { class: 'thumbs' }, entries.filter((x) => x.photo).slice(0, 3).map((x) => h('img', { src: x.photo, class: 'thumb' })))]
             : h('div', { class: 'add' }, '+'));
       })));
@@ -402,86 +402,25 @@ function mealSheet(doc, m, ctx, type) {
   });
 }
 
-// ---------- 약 · 영양제 (끼니별) ----------
-// 기록 구조: doc.meds[medId][slot] = { taken, at }
-export function medSlotsOf(x) { return x.slots?.length ? x.slots : ['breakfast']; }
-export function isTaken(doc, medId, slot) { return !!doc.meds[medId]?.[slot]?.taken; }
-export function toggleMed(day, medId, slot) {
-  return updateDay(day, (d) => {
-    const cur = d.meds[medId];
-    const entry = (cur && typeof cur === 'object' && !('taken' in cur)) ? cur : {}; // 옛 형식(하루 1회 체크)은 버림
-    entry[slot] = entry[slot]?.taken ? { taken: false } : { taken: true, at: nowHM() };
-    d.meds[medId] = entry;
-  });
-}
-
-export function medDot(x, on) {
-  return h('span', { class: 'pill-dot ' + (x.kind === 'medication' ? 'med' : 'sup') + (on ? ' on' : ''), title: x.name });
-}
-
-function medRow(doc, ctx, x, slot) {
-  const on = isTaken(doc, x.id, slot);
-  const at = doc.meds[x.id]?.[slot]?.at;
-  return h('div', { class: 'med-row', onclick: () => toggleMed(ctx.day, x.id, slot) },
-    h('span', { class: 'check' + (on ? ' on' : '') }, on ? '✓' : ''),
-    h('span', { class: 'grow' }, x.name, x.dose ? h('span', { class: 'muted small' }, ` ${x.dose}`) : null),
-    on && at ? h('span', { class: 'muted small' }, at) : null);
-}
-
-function medGroups(doc, m) {
-  const meds = m.medications.filter((x) => x.active).sort((a, b) => a.order - b.order);
-  return MED_SLOTS.map((sl) => ({ ...sl, meds: meds.filter((x) => medSlotsOf(x).includes(sl.key)) })).filter((g) => g.meds.length);
-}
-
-// 오늘 화면: 한 줄 요약 (누르면 세부 시트)
+// ---------- 약 · 영양제 (세트) ----------
 function medsSection(doc, m, ctx) {
-  const groups = medGroups(doc, m);
+  const groups = slotGroups(m);
   if (!groups.length) return h('div', { class: 'card compact', onclick: () => ctx.goTab('settings') },
-    h('span', null, '💊 약 · 영양제'), h('span', { class: 'muted small grow', style: 'text-align:right' }, '설정에서 등록 ›'));
+    h('span', null, '💊 약 · 영양제'), h('span', { class: 'muted small grow', style: 'text-align:right' }, '설정에서 세트 등록 ›'));
   return h('div', { class: 'card compact', onclick: () => medsSheet(doc, m, ctx) },
     h('span', null, '💊 약 · 영양제'),
     h('span', { class: 'grow row', style: 'justify-content:flex-end;gap:10px;flex-wrap:wrap' },
-      groups.map((g) => h('span', { class: 'med-dots' }, h('span', { class: 'muted small' }, g.icon), g.meds.map((x) => medDot(x, isTaken(doc, x.id, g.key)))))),
+      groups.map((g) => h('span', { class: 'med-dots' }, h('span', { class: 'muted small' }, g.icon), g.sets.map((set) => pieFor(doc, set, g.key, 16))))),
     h('span', { class: 'muted' }, '›'));
 }
 
-function medsSheet(doc, m, ctx) {
-  openSheet({
-    title: '💊 약 · 영양제',
-    render: (sh) => {
-      const groups = medGroups(doc, m);
-      const rows = groups.map((g) => h('div', { class: 'med-group' },
-        h('div', { class: 'med-group-title' }, `${g.icon} ${g.label}`),
-        g.meds.map((x) => {
-          const on = isTaken(doc, x.id, g.key);
-          const at = doc.meds[x.id]?.[g.key]?.at;
-          return h('div', { class: 'med-row', onclick: async () => { await toggleMed(ctx.day, x.id, g.key); doc = await getDay(ctx.day); sh.refresh(); } },
-            medDot(x, on),
-            h('span', { class: 'grow' }, x.name, x.dose ? h('span', { class: 'muted small' }, ` ${x.dose}`) : null),
-            on && at ? h('span', { class: 'muted small' }, at) : h('span', { class: 'muted small' }, on ? '' : '안 먹음'));
-        })));
-      return h('div', null,
-        h('div', { class: 'row muted small', style: 'gap:14px;margin-bottom:8px' },
-          h('span', { class: 'row', style: 'gap:4px' }, h('span', { class: 'pill-dot med on' }), '약'),
-          h('span', { class: 'row', style: 'gap:4px' }, h('span', { class: 'pill-dot sup on' }), '영양제'),
-          h('span', { class: 'row', style: 'gap:4px' }, h('span', { class: 'pill-dot sup' }), '안 먹음')),
-        rows,
-        h('button', { class: 'btn secondary block', style: 'margin-top:12px', onclick: () => { sh.close(); ctx.goTab('settings'); } }, '약·영양제 목록 수정 (설정)'));
-    },
-  });
-}
-
-// 식사 시트 안: 이 끼니와 함께 먹는 약 칩
+// 식사 시트 안: 이 끼니의 세트들
 function mealMedsRow(doc, m, ctx, slot, onToggle) {
-  const meds = m.medications.filter((x) => x.active && medSlotsOf(x).includes(slot)).sort((a, b) => a.order - b.order);
-  if (!meds.length) return null;
+  const sets = setsForSlot(m, slot);
+  if (!sets.length) return null;
   return h('div', { class: 'field' },
     h('label', null, '💊 이 끼니와 함께'),
-    h('div', { class: 'chips' }, meds.map((x) => {
-      const on = isTaken(doc, x.id, slot);
-      return h('button', { class: 'chip pill ' + (x.kind === 'medication' ? 'med' : 'sup') + (on ? ' on' : ''), onclick: async () => { await toggleMed(ctx.day, x.id, slot); toast(on ? `${x.name} 체크 해제` : `${x.name} 먹었어요`); onToggle?.(); } },
-        medDot(x, on), ' ', x.name);
-    })));
+    sets.map((set) => setRow(doc, ctx, set, slot, onToggle)));
 }
 
 // ---------- 특이사항 ----------

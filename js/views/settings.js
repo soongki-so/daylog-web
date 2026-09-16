@@ -15,9 +15,9 @@ export async function renderSettings(root, ctx) {
       item(`${p.favorite ? '★ ' : ''}${p.name}`, [p.kcal ? `${p.kcal} kcal` : null, p.items].filter(Boolean).join(' · '), () => presetSheet(m, p))),
       () => presetSheet(m, null)),
 
-    section('💊 약 · 영양제', '매일 체크할 항목', m.medications.sort((a, b) => a.order - b.order).map((x) =>
-      item(x.name, `${x.kind === 'medication' ? '약' : '영양제'}${x.dose ? ' · ' + x.dose : ''} · ${(x.slots?.length ? x.slots : ['breakfast']).map((k) => MED_SLOTS.find((s) => s.key === k)?.label ?? k).join('/')}${x.active ? '' : ' · 숨김'}`, () => medSheet(m, x))),
-      () => medSheet(m, null)),
+    section('💊 약 · 영양제 세트', '세트마다 동그라미 하나. 항목을 다 먹으면 꽉 차요', (m.medSets ?? []).slice().sort((a, b) => a.order - b.order).map((x) =>
+      item(`${x.kind === 'medication' ? '🔴' : '🟢'} ${x.name}`, `${(x.items ?? []).map((i) => i.name).join(', ')} · ${(x.slots?.length ? x.slots : ['breakfast']).map((k) => MED_SLOTS.find((s) => s.key === k)?.label ?? k).join('/')}${x.active === false ? ' · 숨김' : ''}`, () => setSheet(m, x))),
+      () => setSheet(m, null)),
 
     section('🏷️ 특이사항 태그', '', m.tags.sort((a, b) => a.order - b.order).map((t) =>
       item(`${t.icon} ${t.name}`, t.active ? '' : '숨김', () => tagSheet(m, t))),
@@ -66,30 +66,39 @@ function presetSheet(m, p) {
   });
 }
 
-// ---------- 약 ----------
-function medSheet(m, x) {
-  const name = input({ type: 'text', value: x?.name ?? '', placeholder: '예: 오메가3' });
-  const kind = select([{ value: 'supplement', label: '영양제' }, { value: 'medication', label: '약' }], x?.kind ?? 'supplement');
-  const dose = input({ type: 'text', value: x?.dose ?? '', placeholder: '예: 1정 (선택)' });
-  const active = h('input', { type: 'checkbox', checked: x ? x.active : true });
+// ---------- 약·영양제 세트 ----------
+function setSheet(m, x) {
+  const name = input({ type: 'text', value: x?.name ?? '', placeholder: '예: 아침약, 영양제' });
+  const kind = select([{ value: 'medication', label: '약 (빨강)' }, { value: 'supplement', label: '영양제 (초록)' }], x?.kind ?? 'medication');
+  const active = h('input', { type: 'checkbox', checked: x ? x.active !== false : true });
   const cur = new Set(x?.slots?.length ? x.slots : ['breakfast']);
   const slotBoxes = MED_SLOTS.map((sl) => ({ key: sl.key, box: h('input', { type: 'checkbox', checked: cur.has(sl.key) }), label: `${sl.icon} ${sl.label}` }));
+  let items = (x?.items ?? []).map((i) => ({ ...i }));
+  if (!items.length) items.push({ id: uid(), name: '', dose: null });
   openSheet({
-    title: x ? '약·영양제 수정' : '약·영양제 추가',
+    title: x ? '세트 수정' : '세트 추가',
     render: (sh) => h('div', null,
-      field('이름', name),
-      h('div', { class: 'grid2' }, field('구분', kind), field('용량', dose)),
+      field('세트 이름', name),
+      h('div', { class: 'grid2' }, field('종류', kind)),
       h('div', { class: 'field' }, h('label', null, '먹는 때 (여러 개 가능)'),
         h('div', { class: 'chips' }, slotBoxes.map((b) => h('label', { class: 'chip' }, b.box, ' ', b.label)))),
+      h('div', { class: 'field' }, h('label', null, '구성 항목'),
+        items.map((it, idx) => h('div', { class: 'row', style: 'margin-bottom:6px' },
+          input({ type: 'text', value: it.name, placeholder: `항목 ${idx + 1} 이름`, oninput: (e) => { it.name = e.target.value; } }),
+          h('div', { style: 'width:90px' }, input({ type: 'text', value: it.dose ?? '', placeholder: '용량', oninput: (e) => { it.dose = e.target.value.trim() || null; } })),
+          h('button', { class: 'icon-btn plain', onclick: () => { items = items.filter((y) => y !== it); if (!items.length) items.push({ id: uid(), name: '', dose: null }); sh.refresh(); } }, '🗑️'))),
+        h('button', { class: 'btn secondary sm', onclick: () => { items.push({ id: uid(), name: '', dose: null }); sh.refresh(); } }, '+ 항목 추가')),
       h('label', { class: 'row', style: 'margin-bottom:14px' }, active, ' 오늘 화면에 표시'),
       h('div', { class: 'row' },
-        x && h('button', { class: 'btn danger', onclick: async () => { if (!confirm('삭제할까요? 과거 체크 기록은 남습니다.')) return; await updateMasters((mm) => { mm.medications = mm.medications.filter((y) => y.id !== x.id); }); sh.close(); } }, '삭제'),
+        x && h('button', { class: 'btn danger', onclick: async () => { if (!confirm('세트를 삭제할까요? 과거 체크 기록은 남습니다.')) return; await updateMasters((mm) => { mm.medSets = (mm.medSets ?? []).filter((y) => y.id !== x.id); }); sh.close(); } }, '삭제'),
         h('button', { class: 'btn grow', onclick: async () => {
-          if (!name.value.trim()) return toast('이름을 입력하세요');
+          if (!name.value.trim()) return toast('세트 이름을 입력하세요');
           const slots = slotBoxes.filter((b) => b.box.checked).map((b) => b.key);
           if (!slots.length) return toast('먹는 때를 하나 이상 고르세요');
-          const rec = { id: x?.id ?? uid(), name: name.value.trim(), kind: kind.value, dose: dose.value.trim() || null, slots, active: active.checked, order: x?.order ?? (m.medications.length + 1) };
-          await updateMasters((mm) => { const i = mm.medications.findIndex((y) => y.id === rec.id); if (i >= 0) mm.medications[i] = rec; else mm.medications.push(rec); });
+          const cleanItems = items.filter((i) => i.name.trim()).map((i) => ({ id: i.id, name: i.name.trim(), dose: i.dose || null }));
+          if (!cleanItems.length) return toast('항목을 하나 이상 넣으세요');
+          const rec = { id: x?.id ?? uid(), name: name.value.trim(), kind: kind.value, slots, items: cleanItems, active: active.checked, order: x?.order ?? ((m.medSets?.length ?? 0) + 1) };
+          await updateMasters((mm) => { mm.medSets = mm.medSets ?? []; const i = mm.medSets.findIndex((y) => y.id === rec.id); if (i >= 0) mm.medSets[i] = rec; else mm.medSets.push(rec); });
           sh.close();
         } }, '저장'))),
   });

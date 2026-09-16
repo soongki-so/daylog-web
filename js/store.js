@@ -56,11 +56,20 @@ export const getAllDays = () => db.getAll('days');
 
 let mastersCache = null;
 
+// 예전 개별 약 목록 → 약 1개짜리 세트로 변환 (처음 설치면 기본 세트)
+function migrateSets(meds) {
+  // 비어 있거나 처음 깔릴 때 들어간 샘플(종합비타민·오메가3) 그대로면 새 기본 세트로
+  if (!Array.isArray(meds) || !meds.length || meds.every((x) => ['m_vita', 'm_omega'].includes(x.id))) return structuredClone(DEFAULT_MASTERS.medSets);
+  return meds.map((x, i) => ({ id: x.id, name: x.name, kind: x.kind ?? 'supplement', slots: x.slots?.length ? x.slots : ['breakfast'],
+    active: x.active !== false, order: x.order ?? i + 1, items: [{ id: x.id + '_i', name: x.name, dose: x.dose ?? null }] }));
+}
+
 function mergeDefaults(m) {
   return {
     id: 'main',
     presets: m.presets ?? structuredClone(DEFAULT_MASTERS.presets),
-    medications: m.medications ?? structuredClone(DEFAULT_MASTERS.medications),
+    medications: m.medications ?? [],
+    medSets: m.medSets ?? migrateSets(m.medications),
     tags: m.tags ?? structuredClone(DEFAULT_MASTERS.tags),
     settings: { ...DEFAULT_MASTERS.settings, ...(m.settings ?? {}) },
   };

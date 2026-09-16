@@ -135,6 +135,10 @@ hr.sep { border: 0; border-top: 1px solid var(--line); margin: 12px 0; }
 .thumb { width: 34px; height: 34px; object-fit: cover; border-radius: 8px; }
 .thumb.lg { width: 56px; height: 56px; border-radius: 10px; }
 .thumbs { display: flex; gap: 4px; margin-top: 2px; }
+.med-pie { flex: none; display: inline-block; vertical-align: middle; }
+.medset { padding: 8px 0; border-bottom: 1px solid var(--line); }
+.medset:last-child { border-bottom: 0; }
+.sat-face { font-size: 13px; }
 .meal-slot .t { display: flex; align-items: center; }
 .med-row { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--line); cursor: pointer; }
 .med-row:last-child { border-bottom: 0; }
