@@ -1,5 +1,5 @@
 // 오늘 화면: 통합 대시보드 → 식사 → 약·영양제 → 특이사항 → 하루평가 (투약은 달력에서)
-import { h, openSheet, toast, ring, fmtKcal, numOr, field, input, select } from '../ui.js';
+import { h, openSheet, toast, ring, fmtKcal, numOr, field, input, select, inbodyCsvPicker } from '../ui.js';
 import { getDay, updateDay, getMasters, getDaysInRange, uid } from '../store.js';
 import { fmtKey, addDays, todayKey, nowHM, minutesToText, sleepMinutes } from '../date.js';
 import { MEAL_TYPES, SATIETY, RATINGS, EXERCISE_TYPES, MED_SLOTS } from '../defaults.js';
@@ -133,10 +133,13 @@ function weightSheet(doc, ctx) {
   let photo = w.photo ?? null;
   let inbodyOpen = !!(w.muscle || w.bodyFat || w.bmr || w.photo);
   const fileIn = h('input', { type: 'file', accept: 'image/*', style: 'display:none' });
+  let sheetApi = null;
+  const csv = inbodyCsvPicker(() => sheetApi?.close());
 
   openSheet({
     title: '⚖️ 체중 · 인바디',
     render: (sh) => {
+      sheetApi = sh;
       fileIn.onchange = async (e) => {
         const f = e.target.files[0]; if (!f) return;
         try { photo = await shrinkImage(f); inbodyOpen = true; sh.refresh(); toast('사진을 붙였어요'); }
@@ -161,7 +164,11 @@ function weightSheet(doc, ctx) {
                   h('button', { class: 'btn danger sm', onclick: () => { photo = null; sh.refresh(); } }, '지우기'))
               : h('button', { class: 'btn secondary block', onclick: () => fileIn.click() }, '📷 인바디 결과지 사진 붙이기'),
             fileIn),
-          h('div', { class: 'muted small', style: 'margin:-6px 0 12px' }, '인바디 앱 결과 화면을 캡처하거나 결과지를 찍어 붙여 두면 달력에서 다시 볼 수 있어요.')),
+          h('div', { class: 'muted small', style: 'margin:-6px 0 12px' }, '인바디 앱 결과 화면을 캡처하거나 결과지를 찍어 붙여 두면 달력에서 다시 볼 수 있어요.'),
+          (w.bmi || w.visceral || w.whr) && h('div', { class: 'muted small', style: 'margin:-6px 0 12px' },
+            ['BMI ' + (w.bmi ?? '-'), '내장지방레벨 ' + (w.visceral ?? '-'), '복부지방률 ' + (w.whr ?? '-'), w.device ? 'InBody' + w.device : null].filter(Boolean).join(' · ')),
+          h('button', { class: 'btn secondary block', style: 'margin-bottom:12px', onclick: csv.open }, '📋 인바디 앱 CSV 가져오기 (전체 기록)'),
+          csv.input),
         h('div', { class: 'row' },
           doc.weight && h('button', { class: 'btn danger', onclick: async () => { await updateDay(ctx.day, (d) => { d.weight = null; }); sh.close(); } }, '삭제'),
           h('button', { class: 'btn grow', onclick: async () => {

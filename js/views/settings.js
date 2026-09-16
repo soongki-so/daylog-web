@@ -1,5 +1,5 @@
 // 설정: 프리셋 / 약·영양제 / 특이사항 태그 / 목표 / 데이터 백업
-import { h, openSheet, toast, numOr, field, input, select } from '../ui.js';
+import { h, openSheet, toast, numOr, field, input, select, inbodyCsvPicker } from '../ui.js';
 import { getMasters, updateMasters, exportAll, importAll, resetAll, uid } from '../store.js';
 import { MEAL_TYPES, MED_SLOTS } from '../defaults.js';
 
@@ -24,7 +24,7 @@ export async function renderSettings(root, ctx) {
       () => tagSheet(m, null)),
 
     goalsCard(m),
-    dataCard(),
+    ...dataCard(),
     h('div', { class: 'muted small', style: 'text-align:center;margin-top:8px' }, 'DayLog · 1단계 (이 기기에만 저장)'),
   );
 }
@@ -159,7 +159,13 @@ function dataCard() {
     } catch (err) { alert('가져오기 실패: ' + err.message); }
     e.target.value = '';
   } });
-  return h('div', { class: 'card' },
+  const inbody = inbodyCsvPicker();
+  return [h('div', { class: 'card' },
+    h('div', { class: 'card-title' }, h('span', null, '📋 인바디 앱 연동')),
+    h('div', { class: 'muted small', style: 'margin-bottom:10px' }, '인바디 앱 → 결과 화면 → 내보내기(CSV) → "파일에 저장" 한 뒤, 아래 버튼으로 그 파일을 고르면 측정 기록 전체가 체중 기록에 들어와요. 새로 측정할 때마다 다시 가져오면 됩니다.'),
+    h('button', { class: 'btn secondary block', onclick: inbody.open }, '📋 인바디 CSV 파일 가져오기'),
+    inbody.input),
+  h('div', { class: 'card' },
     h('div', { class: 'card-title' }, h('span', null, '💾 데이터')),
     h('div', { class: 'muted small', style: 'margin-bottom:10px' }, '지금은 이 기기의 브라우저에만 저장돼요. 다른 기기로 옮기거나 백업하려면 내보내기를 쓰세요. (2단계에서 계정 동기화 예정)'),
     h('div', { class: 'grid2' },
@@ -181,5 +187,5 @@ function dataCard() {
       if (!confirm('모든 기록과 설정을 지웁니다. 되돌릴 수 없어요. 계속할까요?')) return;
       if (!confirm('정말 지울까요?')) return;
       await resetAll(); toast('초기화했어요');
-    } }, '모든 데이터 지우기'));
+    } }, '모든 데이터 지우기'))];
 }

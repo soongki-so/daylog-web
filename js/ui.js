@@ -88,3 +88,27 @@ export function select(options, value, attrs = {}) {
     options.map((o) => h('option', { value: o.value ?? o, selected: (o.value ?? o) === value }, o.label ?? o)));
   return el;
 }
+
+// 인바디 앱 CSV 가져오기 (설정과 체중 시트에서 공용)
+export function inbodyCsvPicker(onDone) {
+  const fileIn = h('input', { type: 'file', accept: '.csv,text/csv,text/plain', style: 'display:none' });
+  fileIn.onchange = async (e) => {
+    const f = e.target.files[0]; if (!f) return;
+    try {
+      const { parseInBodyCsv, importInBodyRows } = await import('./inbody.js');
+      const rows = parseInBodyCsv(await f.text());
+      if (!rows.length) throw new Error('체중 값이 있는 줄이 없어요.');
+      const first = rows[0].day, last = rows[rows.length - 1].day;
+      if (!confirm(`인바디 기록 ${rows.length}건 (${first} ~ ${last})을 가져올까요?\n같은 날짜의 체중은 인바디 값으로 바뀝니다.`)) return;
+      const r = await importInBodyRows(rows);
+      if (r.latest?.bmr && confirm(`최근 기초대사량 ${r.latest.bmr}kcal을 "안정시 에너지" 기본값으로 쓸까요?`)) {
+        const { updateMasters } = await import('./store.js');
+        await updateMasters((mm) => { mm.settings.restingEnergy = r.latest.bmr; });
+      }
+      toast(`인바디 ${rows.length}건 가져왔어요`);
+      onDone?.(r);
+    } catch (err) { alert('가져오기 실패: ' + err.message); }
+    e.target.value = '';
+  };
+  return { input: fileIn, open: () => fileIn.click() };
+}
