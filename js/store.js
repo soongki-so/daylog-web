@@ -19,6 +19,7 @@ export function emptyDay(day) {
     water: [],           // [{ id, at, ml, source }]
     exercise: [],        // [{ id, at, type, minutes, kcal, source }]
     energy: null,        // { resting, active, source }
+    steps: null,         // 걸음 수 (건강 앱)
     meals: [],           // [{ id, at, type, presetId, name, kcal, satiety, note, source }]
     meds: {},            // { [medId]: { taken, at } }
     injection: null,     // { doseMg, at, note }

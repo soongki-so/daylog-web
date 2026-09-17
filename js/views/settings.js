@@ -1,5 +1,5 @@
 // 설정: 프리셋 / 약·영양제 / 특이사항 태그 / 목표 / 데이터 백업
-import { h, openSheet, toast, numOr, field, input, select, inbodyCsvPicker } from '../ui.js';
+import { h, openSheet, toast, numOr, field, input, select, inbodyCsvPicker, healthImportAction } from '../ui.js';
 import { getMasters, updateMasters, exportAll, importAll, resetAll, uid } from '../store.js';
 import { MEAL_TYPES, MED_SLOTS } from '../defaults.js';
 
@@ -156,6 +156,56 @@ function goalsCard(m) {
     } }, '저장'));
 }
 
+// ---------- 아이폰 건강 앱 연동 (단축어) ----------
+function healthCard() {
+  let guideOpen = false;
+  const paste = h('textarea', { class: 'input', placeholder: '클립보드 버튼이 안 되면 단축어 결과를 여기에 붙여넣고 아래 버튼', style: 'min-height:90px;font-size:13px' });
+  const card = h('div', { class: 'card' });
+  const render = () => card.replaceChildren(
+    h('div', { class: 'card-title' }, h('span', null, '🍎 아이폰 건강 앱 연동')),
+    h('div', { class: 'muted small', style: 'margin-bottom:10px' }, '아이폰 "단축어" 앱으로 건강 앱의 걸음·활동/안정시 에너지·수면·운동·체중을 복사한 뒤, 여기서 가져와요. 직접 입력한 값은 그대로 두고 빈 값만 채웁니다. 오늘 화면의 🍎 버튼도 같은 기능이에요.'),
+    h('button', { class: 'btn block', style: 'margin-bottom:8px', onclick: healthImportAction }, '🍎 클립보드에서 건강 데이터 가져오기'),
+    paste,
+    h('button', { class: 'btn secondary block', style: 'margin:8px 0 12px', onclick: async () => {
+      try {
+        const { parseHealthText, importHealthDays } = await import('../health.js');
+        const rows = parseHealthText(paste.value); if (!rows.length) throw new Error('가져올 값이 없어요.');
+        const r = await importHealthDays(rows); paste.value = ''; toast(`건강 데이터 ${r.count}일치 가져왔어요`);
+      } catch (err) { alert(err.message); }
+    } }, '붙여넣은 내용 가져오기'),
+    h('button', { class: 'btn ghost block', onclick: () => { guideOpen = !guideOpen; render(); } }, guideOpen ? '▲ 단축어 만드는 방법 접기' : '▼ 단축어 만드는 방법 보기'),
+    guideOpen && guide());
+  render();
+  return card;
+}
+
+function guide() {
+  const step = (n, t, sub) => h('div', { class: 'list-item', style: 'align-items:flex-start' },
+    h('b', { style: 'min-width:22px;color:var(--accent)' }, n), h('div', { class: 'grow' }, t, sub && h('div', { class: 'muted small' }, sub)));
+  const code = (t) => h('pre', { style: 'background:#F4F0EA;border-radius:10px;padding:10px;font-size:12px;white-space:pre-wrap;margin:6px 0 0' }, t);
+  return h('div', { style: 'margin-top:10px' },
+    h('div', { class: 'muted small', style: 'margin-bottom:6px' }, '한 번만 만들면 됩니다. 아이폰 "단축어" 앱을 열고:'),
+    step('1', '오른쪽 위 + 로 새 단축어. 이름은 "DayLog 건강".'),
+    step('2', '"건강 샘플 찾기" 동작 추가 → 유형: 걸음 수, 필터: 시작 날짜 "오늘", "그룹화" 끄고 합계.', '결과 변수 이름을 "걸음"으로.'),
+    step('3', '같은 동작을 3번 더 추가: 활동 에너지(합계) → "활동", 안정 시 에너지(합계) → "안정", 체중(최신 1개) → "체중".'),
+    step('4', '"건강 샘플 찾기" → 유형: 수면 분석, 필터: 종료 날짜가 오늘, 정렬: 시작 날짜. "통계 계산"으로 지속 시간 합계 → "수면분". 첫 항목 시작 날짜 → "취침", 마지막 항목 종료 날짜 → "기상".'),
+    step('5', '"운동 찾기" 동작 → 필터: 시작 날짜 오늘. "각 항목 반복"으로 아래 줄을 만들어 "운동목록"에 합치기.', '운동 종류 | 시작 날짜 | 지속 시간(분) | 활동 에너지'),
+    step('6', '"텍스트" 동작에 아래처럼 쓰고 [ ] 자리에 위 변수를 넣습니다.'),
+    code(`DAYLOG-HEALTH
+date: [현재 날짜]
+steps: [걸음]
+active: [활동]
+resting: [안정]
+sleep_start: [취침]
+sleep_end: [기상]
+sleep_minutes: [수면분]
+weight: [체중]
+workout: [운동목록]`),
+    step('7', '"클립보드에 복사" 동작을 마지막에 추가. 완료.'),
+    step('8', '쓰는 법: 단축어 실행(또는 "시리야, DayLog 건강") → DayLog 열고 🍎 버튼.', '자동화 탭에서 "매일 07:30 실행"으로 걸어 두면 아침마다 복사돼 있어요.'),
+    h('div', { class: 'muted small', style: 'margin-top:8px' }, '값이 없는 항목은 줄을 비워 두거나 지워도 됩니다. 날짜·시간은 아이폰 표기(2026. 9. 16. 오후 11:40)를 그대로 넣어도 읽어요.'));
+}
+
 // ---------- 데이터 ----------
 function dataCard() {
   const fileIn = h('input', { type: 'file', accept: 'application/json,.json', style: 'display:none', onchange: async (e) => {
@@ -169,7 +219,7 @@ function dataCard() {
     e.target.value = '';
   } });
   const inbody = inbodyCsvPicker();
-  return [h('div', { class: 'card' },
+  return [healthCard(), h('div', { class: 'card' },
     h('div', { class: 'card-title' }, h('span', null, '📋 인바디 앱 연동')),
     h('div', { class: 'muted small', style: 'margin-bottom:10px' }, '인바디 앱 → 결과 화면 → 내보내기(CSV) → "파일에 저장" 한 뒤, 아래 버튼으로 그 파일을 고르면 측정 기록 전체가 체중 기록에 들어와요. 새로 측정할 때마다 다시 가져오면 됩니다.'),
     h('button', { class: 'btn secondary block', onclick: inbody.open }, '📋 인바디 CSV 파일 가져오기'),

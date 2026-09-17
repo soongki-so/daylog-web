@@ -52,7 +52,22 @@ document.addEventListener('visibilitychange', async () => {
   state._lastToday = t;
 });
 
+// 단축어가 URL로 열어준 경우: #health=<인코딩된 텍스트>
+async function importFromHash() {
+  const m = location.hash.match(/^#health=(.+)$/);
+  if (!m) return;
+  history.replaceState(null, '', location.pathname + location.search);
+  try {
+    const { parseHealthText, importHealthDays } = await import('./health.js');
+    const rows = parseHealthText(decodeURIComponent(m[1]));
+    const r = await importHealthDays(rows);
+    const { toast } = await import('./ui.js');
+    toast(`건강 데이터 ${r.count}일치 가져왔어요`);
+  } catch (err) { alert('건강 데이터 가져오기 실패: ' + err.message); }
+}
+
 (async () => {
+  await importFromHash();
   await ctx.goToday();
   state._lastToday = state.day;
   render();

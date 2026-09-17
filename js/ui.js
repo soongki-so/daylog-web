@@ -112,3 +112,16 @@ export function inbodyCsvPicker(onDone) {
   };
   return { input: fileIn, open: () => fileIn.click() };
 }
+
+// 건강 앱 데이터 가져오기 (클립보드) — 오늘 화면 🍎 버튼과 설정에서 공용
+export async function healthImportAction() {
+  try {
+    const { importFromClipboard } = await import('./health.js');
+    const r = await importFromClipboard();
+    toast(`건강 데이터 ${r.count}일치 가져왔어요`);
+    return r;
+  } catch (err) {
+    alert(err.message);
+    return null;
+  }
+}

@@ -1,5 +1,5 @@
 // 오늘 화면: 통합 대시보드 → 식사 → 약·영양제 → 특이사항 → 하루평가 (투약은 달력에서)
-import { h, openSheet, toast, ring, fmtKcal, numOr, field, input, select, inbodyCsvPicker } from '../ui.js';
+import { h, openSheet, toast, ring, fmtKcal, numOr, field, input, select, inbodyCsvPicker, healthImportAction } from '../ui.js';
 import { getDay, updateDay, getMasters, getDaysInRange, uid } from '../store.js';
 import { fmtKey, addDays, todayKey, nowHM, minutesToText, sleepMinutes } from '../date.js';
 import { MEAL_TYPES, SATIETY, RATINGS, EXERCISE_TYPES } from '../defaults.js';
@@ -38,6 +38,7 @@ function header(ctx, m) {
       h('button', { class: 'icon-btn', onclick: () => { ctx.setDay(addDays(ctx.day, -1)); ctx.goTab('today'); }, 'aria-label': '이전 날' }, '‹'),
       !isToday && h('button', { class: 'btn sm secondary', onclick: () => { ctx.setDay(today); ctx.goTab('today'); } }, '오늘'),
       h('button', { class: 'icon-btn', onclick: () => { ctx.setDay(addDays(ctx.day, 1)); ctx.goTab('today'); }, 'aria-label': '다음 날' }, '›'),
+      h('button', { class: 'icon-btn', onclick: healthImportAction, 'aria-label': '건강 앱 데이터 가져오기', title: '건강 앱 데이터 가져오기 (클립보드)' }, '🍎'),
       h('button', { class: 'icon-btn', onclick: () => ctx.goTab('settings'), 'aria-label': '설정' }, '⚙️')));
 }
 
@@ -79,7 +80,7 @@ function dashboard(doc, m, ctx, prevWeight) {
   const sleepCell = h('div', { class: 'stat', onclick: () => sleepSheet(doc, ctx) },
     h('div', { class: 'k' }, '🌙 수면'),
     h('div', { class: 'v' }, doc.sleep ? minutesToText(doc.sleep.minutes) : h('span', { class: 'muted' }, '입력')),
-    h('div', { class: 'd' }, doc.sleep ? `${doc.sleep.start} → ${doc.sleep.end}` : ''));
+    h('div', { class: 'd' }, doc.sleep ? `${doc.sleep.start ?? '?'} → ${doc.sleep.end ?? '?'}${doc.sleep.source === 'health' ? ' · 건강앱' : ''}` : ''));
 
   const waterCell = h('div', { class: 'stat', onclick: () => waterSheet(doc, m, ctx) },
     h('div', { class: 'k' }, '💧 물 ', h('span', { class: 'grow' }), h('span', null, `${waterMl} / ${s.waterGoalMl}ml`)),
@@ -90,7 +91,7 @@ function dashboard(doc, m, ctx, prevWeight) {
   const exCell = h('div', { class: 'stat', onclick: () => exerciseSheet(doc, ctx) },
     h('div', { class: 'k' }, '🏃 운동'),
     h('div', { class: 'v' }, exMin ? [minutesToText(exMin)] : h('span', { class: 'muted' }, '입력')),
-    h('div', { class: 'd' }, exKcal ? `${fmtKcal(exKcal)} kcal · ${doc.exercise.map((x) => x.type).join(', ')}` : ''));
+    h('div', { class: 'd' }, [exKcal ? `${fmtKcal(exKcal)} kcal · ${doc.exercise.map((x) => x.type).join(', ')}` : (exMin ? doc.exercise.map((x) => x.type).join(', ') : ''), doc.steps ? `걸음 ${Math.round(doc.steps).toLocaleString('ko-KR')}` : ''].filter(Boolean).join(' · ')));
 
   return h('div', { class: 'card' },
     h('div', { class: 'dash' }, ringCell, weightCell, sleepCell, h('div', { class: 'dash-bottom' }, waterCell, exCell)));
@@ -248,7 +249,7 @@ function exerciseSheet(doc, ctx) {
         doc = await getDay(ctx.day); minutes.value = ''; kcal.value = ''; sh.refresh();
       } }, '추가'),
       doc.exercise.length ? doc.exercise.map((x) => h('div', { class: 'list-item' },
-        h('span', { class: 'grow' }, `${x.type} · ${minutesToText(x.minutes)}`, x.kcal ? h('span', { class: 'muted small' }, ` · ${x.kcal}kcal`) : null),
+        h('span', { class: 'grow' }, `${x.type} · ${minutesToText(x.minutes)}`, x.kcal ? h('span', { class: 'muted small' }, ` · ${x.kcal}kcal`) : null, x.source === 'health' ? h('span', { class: 'muted small' }, ' · 건강앱') : null),
         h('button', { class: 'icon-btn plain', onclick: async () => { await updateDay(ctx.day, (d) => { d.exercise = d.exercise.filter((y) => y.id !== x.id); }); doc = await getDay(ctx.day); sh.refresh(); } }, '🗑️')))
         : h('div', { class: 'empty' }, '아직 기록이 없어요')),
   });
