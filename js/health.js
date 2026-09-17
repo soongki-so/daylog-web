@@ -13,7 +13,24 @@
 import { getDay, updateDay, uid } from './store.js';
 import { keyOf, pad, sleepMinutes } from './date.js';
 
-const num = (v) => { const n = parseFloat(String(v).replace(/[^\d.\-]/g, '')); return Number.isFinite(n) ? n : null; };
+const num = (v) => { const n = parseFloat(String(v).replace(/,/g, '').match(/-?\d+(\.\d+)?/)?.[0] ?? ''); return Number.isFinite(n) ? n : null; };
+
+// "55분 24초", "1시간 5분", "1:05:30", "55:24", "55.4 min", "3324초", "3324 s" → 분
+export function parseMinutes(v) {
+  if (v == null) return null;
+  const t = String(v).trim();
+  if (!t) return null;
+  const colon = t.match(/^(\d+):(\d{1,2})(?::(\d{1,2}))?$/);
+  if (colon) return colon[3] != null ? (+colon[1] * 60 + +colon[2] + +colon[3] / 60) : (+colon[1] + +colon[2] / 60);
+  let total = 0, hit = false;
+  const hr = t.match(/(\d+(?:\.\d+)?)\s*(시간|h|hr|hours?)/i); if (hr) { total += +hr[1] * 60; hit = true; }
+  const mn = t.match(/(\d+(?:\.\d+)?)\s*(분|m|min)/i); if (mn) { total += +mn[1]; hit = true; }
+  const sc = t.match(/(\d+(?:\.\d+)?)\s*(초|s|sec)/i); if (sc) { total += +sc[1] / 60; hit = true; }
+  if (hit) return total;
+  const n = num(t);
+  if (n == null) return null;
+  return n > 600 ? n / 60 : n; // 단위 없는 큰 수는 초로 간주
+}
 
 // "2026. 9. 16. 오후 11:40", "2026-09-16 23:40", "2026/09/16 11:40 PM" 등 → { day, hm }
 export function parseDateTime(text) {
@@ -57,13 +74,13 @@ export function parseHealthText(text) {
     else if (key === 'active') c.active = num(val);
     else if (key === 'resting') c.resting = num(val);
     else if (key === 'weight') c.weight = num(val);
-    else if (key === 'sleep_minutes') c.sleepMinutes = num(val);
+    else if (key === 'sleep_minutes') c.sleepMinutes = parseMinutes(val);
     else if (key === 'sleep_start') c.sleepStart = parseDateTime(val);
     else if (key === 'sleep_end') c.sleepEnd = parseDateTime(val);
     else if (key === 'workout') {
       const parts = val.split('|').map((x) => x.trim());
       const [type, start, minutes, kcal] = parts;
-      if (type) c.workouts.push({ type, start: parseDateTime(start), minutes: num(minutes), kcal: num(kcal) });
+      if (type) c.workouts.push({ type, start: parseDateTime(start), minutes: parseMinutes(minutes), kcal: num(kcal) });
     }
   }
   return days.filter((d) => d.steps != null || d.active != null || d.resting != null || d.weight != null || d.sleepMinutes != null || d.sleepStart || d.workouts.length);
