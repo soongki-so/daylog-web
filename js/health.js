@@ -23,9 +23,9 @@ export function parseMinutes(v) {
   const colon = t.match(/^(\d+):(\d{1,2})(?::(\d{1,2}))?$/);
   if (colon) return colon[3] != null ? (+colon[1] * 60 + +colon[2] + +colon[3] / 60) : (+colon[1] + +colon[2] / 60);
   let total = 0, hit = false;
-  const hr = t.match(/(\d+(?:\.\d+)?)\s*(시간|h|hr|hours?)/i); if (hr) { total += +hr[1] * 60; hit = true; }
-  const mn = t.match(/(\d+(?:\.\d+)?)\s*(분|m|min)/i); if (mn) { total += +mn[1]; hit = true; }
-  const sc = t.match(/(\d+(?:\.\d+)?)\s*(초|s|sec)/i); if (sc) { total += +sc[1] / 60; hit = true; }
+  const hr = t.match(/(\d+(?:\.\d+)?)\s*(시간|hours?|hr|h(?![a-z]))/i); if (hr) { total += +hr[1] * 60; hit = true; }
+  const mn = t.match(/(\d+(?:\.\d+)?)\s*(분|min|m(?![a-z]))/i); if (mn) { total += +mn[1]; hit = true; }
+  const sc = t.match(/(\d+(?:\.\d+)?)\s*(초|sec|s(?![a-z]))/i); if (sc) { total += +sc[1] / 60; hit = true; }
   if (hit) return total;
   const n = num(t);
   if (n == null) return null;
@@ -91,7 +91,6 @@ export async function importHealthDays(rows) {
   let count = 0;
   const summary = [];
   for (const r of rows) {
-    const cur = await getDay(r.day);
     await updateDay(r.day, (d) => {
       if (r.steps != null) d.steps = r.steps;
       if (r.active != null || r.resting != null) {
@@ -122,7 +121,6 @@ export async function importHealthDays(rows) {
     if (r.workouts.length) parts.push(`운동 ${r.workouts.length}건`);
     if (r.active != null) parts.push(`활동 ${Math.round(r.active)}kcal`);
     summary.push(`${r.day}: ${parts.join(', ') || '값 없음'}`);
-    void cur;
   }
   return { count, summary };
 }
@@ -136,14 +134,3 @@ export async function importFromClipboard() {
   if (!rows.length) throw new Error('가져올 값이 없어요.');
   return importHealthDays(rows);
 }
-
-export const SHORTCUT_TEMPLATE = `DAYLOG-HEALTH
-date: [오늘 날짜]
-steps: [걸음 수 합계]
-active: [활동 에너지 합계]
-resting: [안정시 에너지 합계]
-sleep_start: [수면 첫 샘플 시작]
-sleep_end: [수면 마지막 샘플 종료]
-sleep_minutes: [수면 시간 합계(분)]
-weight: [최근 체중]
-workout: [운동 종류] | [시작 날짜] | [운동 시간(분)] | [활동 에너지]`;
