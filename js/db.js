@@ -12,7 +12,17 @@ function open() {
       if (!db.objectStoreNames.contains('days')) db.createObjectStore('days', { keyPath: 'day' });
       if (!db.objectStoreNames.contains('masters')) db.createObjectStore('masters', { keyPath: 'id' });
     };
-    req.onsuccess = () => resolve(req.result);
+    req.onsuccess = () => {
+      const db = req.result;
+      // 저장소가 없는 빈 DB(비정상 상태)면 지우고 다시 만든다
+      if (!db.objectStoreNames.contains('days') || !db.objectStoreNames.contains('masters')) {
+        db.close();
+        const del = indexedDB.deleteDatabase(NAME);
+        del.onsuccess = del.onerror = del.onblocked = () => { opening = null; open().then(resolve, reject); };
+        return;
+      }
+      resolve(db);
+    };
     req.onerror = () => reject(req.error);
   });
   return opening;
