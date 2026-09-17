@@ -122,12 +122,8 @@ export async function healthImportAction(ctx) {
     return r;
   } catch (err) {
     const inArtifact = /claude\.ai/.test(location.hostname) || window.top !== window.self;
-    alert((inArtifact ? '이 미리보기 페이지에서는 클립보드를 읽을 수 없어요. 정식 주소에서 눌러 주세요.
-
-' : '') + err.message
-      + '
-
-아이폰에서는 🍎를 누른 직후 화면에 뜨는 "붙여넣기" 버튼을 눌러야 읽혀요. 안 되면 설정의 붙여넣기 칸을 쓰세요.');
+    alert((inArtifact ? '이 미리보기 페이지에서는 클립보드를 읽을 수 없어요. 정식 주소에서 눌러 주세요.\n\n' : '') + err.message
+      + '\n\n아이폰에서는 🍎를 누른 직후 화면에 뜨는 "붙여넣기" 버튼을 눌러야 읽혀요. 안 되면 설정의 붙여넣기 칸을 쓰세요.');
     if (ctx?.goTab) { ctx.goTab('settings'); setTimeout(() => document.getElementById('health-paste')?.scrollIntoView({ block: 'center' }), 300); }
     return null;
   }
