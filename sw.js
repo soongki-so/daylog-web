@@ -1,5 +1,5 @@
 // DayLog service worker — 네트워크 우선, 실패 시 캐시 (오프라인에서도 앱 껍데기 열림)
-const CACHE = 'daylog-v7';
+const CACHE = 'daylog-v8';
 const SHELL = [
   './', './index.html', './manifest.webmanifest', './css/app.css',
   './js/app.js', './js/db.js', './js/store.js', './js/date.js', './js/defaults.js',

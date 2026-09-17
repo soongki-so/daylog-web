@@ -114,14 +114,21 @@ export function inbodyCsvPicker(onDone) {
 }
 
 // 건강 앱 데이터 가져오기 (클립보드) — 오늘 화면 🍎 버튼과 설정에서 공용
-export async function healthImportAction() {
+export async function healthImportAction(ctx) {
   try {
     const { importFromClipboard } = await import('./health.js');
     const r = await importFromClipboard();
     toast(`건강 데이터 ${r.count}일치 가져왔어요`);
     return r;
   } catch (err) {
-    alert(err.message);
+    const inArtifact = /claude\.ai/.test(location.hostname) || window.top !== window.self;
+    alert((inArtifact ? '이 미리보기 페이지에서는 클립보드를 읽을 수 없어요. 정식 주소에서 눌러 주세요.
+
+' : '') + err.message
+      + '
+
+아이폰에서는 🍎를 누른 직후 화면에 뜨는 "붙여넣기" 버튼을 눌러야 읽혀요. 안 되면 설정의 붙여넣기 칸을 쓰세요.');
+    if (ctx?.goTab) { ctx.goTab('settings'); setTimeout(() => document.getElementById('health-paste')?.scrollIntoView({ block: 'center' }), 300); }
     return null;
   }
 }

@@ -159,12 +159,12 @@ function goalsCard(m) {
 // ---------- 아이폰 건강 앱 연동 (단축어) ----------
 function healthCard() {
   let guideOpen = false;
-  const paste = h('textarea', { class: 'input', placeholder: '클립보드 버튼이 안 되면 단축어 결과를 여기에 붙여넣고 아래 버튼', style: 'min-height:90px;font-size:13px' });
+  const paste = h('textarea', { class: 'input', id: 'health-paste', placeholder: '클립보드 버튼이 안 되면 단축어 결과를 여기에 붙여넣고 아래 버튼', style: 'min-height:90px;font-size:13px' });
   const card = h('div', { class: 'card' });
   const render = () => card.replaceChildren(
     h('div', { class: 'card-title' }, h('span', null, '🍎 아이폰 건강 앱 연동')),
     h('div', { class: 'muted small', style: 'margin-bottom:10px' }, '아이폰 "단축어" 앱으로 건강 앱의 걸음·활동/안정시 에너지·수면·운동·체중을 복사한 뒤, 여기서 가져와요. 직접 입력한 값은 그대로 두고 빈 값만 채웁니다. 오늘 화면의 🍎 버튼도 같은 기능이에요.'),
-    h('button', { class: 'btn block', style: 'margin-bottom:8px', onclick: healthImportAction }, '🍎 클립보드에서 건강 데이터 가져오기'),
+    h('button', { class: 'btn block', style: 'margin-bottom:8px', onclick: () => healthImportAction() }, '🍎 클립보드에서 건강 데이터 가져오기'),
     paste,
     h('button', { class: 'btn secondary block', style: 'margin:8px 0 12px', onclick: async () => {
       try {
