@@ -47,7 +47,7 @@ export function openSheet({ title, render, onClose }) {
         h('h2', null, title),
         h('button', { class: 'icon-btn plain', onclick: close, 'aria-label': '닫기' }, '✕')),
       body));
-  const api = { close, refresh: () => { body.replaceChildren(); const r = render(api); if (r) body.append(r); } };
+  const api = { close, refresh: async () => { body.replaceChildren(); const r = await render(api); if (r) body.append(r); } };
   api.refresh();
   root.append(overlay);
   sheetCount++;

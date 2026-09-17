@@ -10,9 +10,10 @@ import { getAllDays } from '../store.js';
 export async function renderToday(root, ctx) {
   const [doc, m] = await Promise.all([getDay(ctx.day), getMasters()]);
   const prevWeight = await findPrevWeight(ctx.day);
+  const ptInfo = doc.exercise.some((x) => x.kind === 'pt') ? await ptProgress(ctx.day, m.settings) : null;
   root.replaceChildren(
     header(ctx, m),
-    dashboard(doc, m, ctx, prevWeight),
+    dashboard(doc, m, ctx, prevWeight, ptInfo),
     mealsSection(doc, m, ctx),
     medsSection(doc, m, ctx),
     tagsSection(doc, m, ctx),
@@ -51,7 +52,7 @@ export function energyOf(doc, settings) {
   return { intake, resting, active, expenditure, balance: intake - expenditure };
 }
 
-function dashboard(doc, m, ctx, prevWeight) {
+function dashboard(doc, m, ctx, prevWeight, ptInfo) {
   const s = m.settings;
   const e = energyOf(doc, s);
   const waterMl = doc.water.reduce((a, x) => a + x.ml, 0);
@@ -88,8 +89,9 @@ function dashboard(doc, m, ctx, prevWeight) {
     h('div', { class: 'quick', onclick: (ev) => ev.stopPropagation() },
       s.waterQuick.map((ml) => h('button', { onclick: () => addWater(ctx.day, ml) }, `+${ml}`))));
 
-  const exCell = h('div', { class: 'stat', onclick: () => exerciseSheet(doc, ctx) },
-    h('div', { class: 'k' }, '🏃 운동'),
+  const ptToday = doc.exercise.filter((x) => x.kind === 'pt').length;
+  const exCell = h('div', { class: 'stat', onclick: () => exerciseSheet(doc, m, ctx) },
+    h('div', { class: 'k' }, '🏃 운동', ptToday ? h('span', { class: 'pt-badge', style: 'margin-left:auto' }, `PT ${ptInfo ? ptInfo.upTo : ''}/${s.ptTotal ?? 30}회`) : null),
     h('div', { class: 'v' }, exMin ? [minutesToText(exMin)] : h('span', { class: 'muted' }, '입력')),
     h('div', { class: 'd' }, [exKcal ? `${fmtKcal(exKcal)} kcal · ${doc.exercise.map((x) => x.type).join(', ')}` : (exMin ? doc.exercise.map((x) => x.type).join(', ') : ''), doc.steps ? `걸음 ${Math.round(doc.steps).toLocaleString('ko-KR')}` : ''].filter(Boolean).join(' · ')));
 
@@ -234,24 +236,55 @@ function waterSheet(doc, m, ctx) {
   });
 }
 
-function exerciseSheet(doc, ctx) {
+// PT 회차: 앱 쓰기 전 완료 횟수(설정) + 이 날짜까지 기록된 PT 수업 수
+export async function ptProgress(day, settings) {
+  const days = await getDaysInRange('2000-01-01', day);
+  let before = settings.ptDone ?? 0, today = 0;
+  for (const d of days) for (const x of d.exercise) if (x.kind === 'pt') { if (d.day < day) before++; else today++; }
+  return { before, today, total: settings.ptTotal ?? 30, upTo: before + today };
+}
+
+function exerciseSheet(doc, m, ctx) {
+  let kind = 'personal';
   const type = select(EXERCISE_TYPES, '걷기');
   const minutes = input({ type: 'number', inputmode: 'numeric', placeholder: '분' });
   const kcal = input({ type: 'number', inputmode: 'numeric', placeholder: '선택' });
+  const note = input({ type: 'text', placeholder: '메모 (선택) 예: 하체, 트레이너 코멘트' });
   openSheet({
-    title: '운동',
-    render: (sh) => h('div', null,
-      field('종류', type),
-      h('div', { class: 'grid2' }, field('시간 (분)', minutes), field('소모 칼로리', kcal)),
-      h('button', { class: 'btn block', style: 'margin-bottom:12px', onclick: async () => {
-        const mnt = numOr(minutes.value); if (!mnt) return toast('시간을 입력하세요');
-        await updateDay(ctx.day, (d) => d.exercise.push({ id: uid(), at: nowHM(), type: type.value, minutes: mnt, kcal: numOr(kcal.value), source: 'manual' }));
-        doc = await getDay(ctx.day); minutes.value = ''; kcal.value = ''; sh.refresh();
-      } }, '추가'),
-      doc.exercise.length ? doc.exercise.map((x) => h('div', { class: 'list-item' },
-        h('span', { class: 'grow' }, `${x.type} · ${minutesToText(x.minutes)}`, x.kcal ? h('span', { class: 'muted small' }, ` · ${x.kcal}kcal`) : null, x.source === 'health' ? h('span', { class: 'muted small' }, ' · 건강앱') : null),
-        h('button', { class: 'icon-btn plain', onclick: async () => { await updateDay(ctx.day, (d) => { d.exercise = d.exercise.filter((y) => y.id !== x.id); }); doc = await getDay(ctx.day); sh.refresh(); } }, '🗑️')))
-        : h('div', { class: 'empty' }, '아직 기록이 없어요')),
+    title: '🏃 운동',
+    render: async (sh) => {
+      const pt = await ptProgress(ctx.day, m.settings);
+      let ptSeq = pt.before; // 목록에서 PT 항목에 회차 번호 매기기
+      const body = h('div', null,
+        h('div', { class: 'field' }, h('label', null, '구분'),
+          h('div', { class: 'chips' },
+            h('button', { class: 'chip' + (kind === 'personal' ? ' on' : ''), onclick: () => { kind = 'personal'; sh.refresh(); } }, '🏃 개인 운동'),
+            h('button', { class: 'chip' + (kind === 'pt' ? ' on' : ''), onclick: () => { kind = 'pt'; type.value = 'PT'; sh.refresh(); } }, `🏋️ PT 수업`))),
+        kind === 'pt' && h('div', { class: 'muted small', style: 'margin:-6px 0 12px' }, `이번 수업은 ${pt.upTo + 1}회차예요 (총 ${pt.total}회, 남은 수업 ${Math.max(0, pt.total - pt.upTo - 1)}회). 총 횟수는 설정에서 바꿔요.`),
+        field('종류', type),
+        h('div', { class: 'grid2' }, field('시간 (분)', minutes), field('소모 칼로리', kcal)),
+        field('메모', note),
+        h('button', { class: 'btn block', style: 'margin-bottom:12px', onclick: async () => {
+          const mnt = numOr(minutes.value); if (!mnt) return toast('시간을 입력하세요');
+          await updateDay(ctx.day, (d) => d.exercise.push({ id: uid(), at: nowHM(), type: type.value, kind, minutes: mnt, kcal: numOr(kcal.value), note: note.value.trim() || null, source: 'manual' }));
+          doc = await getDay(ctx.day); minutes.value = ''; kcal.value = ''; note.value = ''; sh.refresh();
+          toast(kind === 'pt' ? `PT ${pt.upTo + 1}회차 기록` : '운동 기록');
+        } }, kind === 'pt' ? `PT ${pt.upTo + 1}회차 기록` : '추가'),
+        doc.exercise.length ? doc.exercise.map((x) => {
+          const isPt = x.kind === 'pt';
+          if (isPt) ptSeq++;
+          return h('div', { class: 'list-item' },
+            h('span', { class: 'grow' },
+              isPt ? h('span', { class: 'pt-badge' }, `PT ${ptSeq}/${pt.total}회`) : null,
+              isPt ? ' ' : '',
+              `${x.type} · ${minutesToText(x.minutes)}`,
+              x.kcal ? h('span', { class: 'muted small' }, ` · ${x.kcal}kcal`) : null,
+              x.source === 'health' ? h('span', { class: 'muted small' }, ' · 건강앱') : null,
+              x.note ? h('div', { class: 'muted small' }, x.note) : null),
+            h('button', { class: 'icon-btn plain', onclick: async () => { await updateDay(ctx.day, (d) => { d.exercise = d.exercise.filter((y) => y.id !== x.id); }); doc = await getDay(ctx.day); sh.refresh(); } }, '🗑️'));
+        }) : h('div', { class: 'empty' }, '아직 기록이 없어요'));
+      return body;
+    },
   });
 }
 

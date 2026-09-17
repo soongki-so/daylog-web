@@ -64,5 +64,7 @@ export const DEFAULT_MASTERS = {
     injectionName: '마운자로',
     injectionDefaultMg: 2.5,
     dayBoundaryHour: 0,
+    ptTotal: 30,   // PT 등록 총 횟수
+    ptDone: 0,     // 앱 쓰기 전에 이미 한 PT 횟수
   },
 };
