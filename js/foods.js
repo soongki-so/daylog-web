@@ -84,29 +84,59 @@ export const FOODS = [
   ['외식(일반)', 800, '1인분 대략'], ['회식', 1200, '대략'], ['뷔페', 1500, '대략'],
 ];
 
-// 검색: 이름에 포함, 앞글자 일치 우선. history: [{name,kcal}] 개인 기록 우선
-export function searchFoods(query, history = [], limit = 8) {
+// ---- 식약처 공식 식품영양성분 자료 (data/foods-kr.json, 처음 검색할 때 한 번 불러옴) ----
+// 형식: { source, updated, items: [[이름, 1회 kcal, 기준(예 '250g'), 탄수화물g, 단백질g, 지방g, 분류, 추가 검색어], ...] }
+let official = null;
+let loadingOfficial = null;
+export function loadOfficialFoods() {
+  if (official) return Promise.resolve(official);
+  if (!loadingOfficial) {
+    loadingOfficial = fetch('./data/foods-kr.json')
+      .then((r) => (r.ok ? r.json() : { items: [] }))
+      .then((j) => {
+        official = (j.items ?? []).map(([name, kcal, serving, carb, protein, fat, cat, alt]) => ({
+          name, kcal, serving, carb, protein, fat, cat,
+          key: name.toLowerCase().replace(/\s+/g, ''),
+          alt: alt ? alt.toLowerCase().replace(/\s+/g, '') : null,
+        }));
+        return official;
+      })
+      .catch(() => { official = []; return official; });
+  }
+  return loadingOfficial;
+}
+export const officialFoodsCount = () => official?.length ?? 0;
+
+// 검색: 이름에 포함, 앞글자 일치 우선.
+// 순서: 내 기록(★) → 식약처 공식 자료 → 기본 표. 같은 이름은 한 번만.
+export function searchFoods(query, history = [], limit = 10) {
   const q = query.trim().toLowerCase().replace(/\s+/g, '');
   if (!q) return [];
   const seen = new Set();
   const out = [];
-  const push = (name, kcal, serving, mine) => {
-    const key = name.toLowerCase();
+  const push = (f) => {
+    const key = f.name.toLowerCase().replace(/\s+/g, '');
     if (seen.has(key)) return;
     seen.add(key);
-    out.push({ name, kcal, serving, mine });
+    out.push(f);
   };
-  const score = (name) => {
-    const n = name.toLowerCase().replace(/\s+/g, '');
-    if (n === q) return 0;
-    if (n.startsWith(q)) return 1;
-    if (n.includes(q)) return 2;
-    return -1;
-  };
-  const mine = history.map((h) => ({ ...h, s: score(h.name) })).filter((h) => h.s >= 0).sort((a, b) => a.s - b.s);
-  mine.forEach((h) => push(h.name, h.kcal, '내 기록', true));
-  const db = FOODS.map(([name, kcal, serving]) => ({ name, kcal, serving, s: score(name) })).filter((f) => f.s >= 0)
-    .sort((a, b) => a.s - b.s || a.name.length - b.name.length);
-  db.forEach((f) => push(f.name, f.kcal, f.serving, false));
+  const score = (key) => (key === q ? 0 : key.startsWith(q) ? 1 : key.includes(q) ? 2 : -1);
+  const norm = (s) => s.toLowerCase().replace(/\s+/g, '');
+
+  history.map((h) => ({ ...h, s: score(norm(h.name)) })).filter((h) => h.s >= 0).sort((a, b) => a.s - b.s)
+    .forEach((h) => push({ name: h.name, kcal: h.kcal, serving: '내 기록', src: 'mine', mine: true }));
+
+  const hits = [];
+  for (const f of official ?? []) {
+    let s = score(f.key);
+    if (f.alt) { const s2 = score(f.alt); if (s2 >= 0 && (s < 0 || s2 < s)) s = s2; }
+    if (s >= 0) hits.push({ ...f, s, src: 'official' });
+  }
+  for (const [name, kcal, serving] of FOODS) {
+    const s = score(norm(name));
+    if (s >= 0) hits.push({ name, kcal, serving, s, src: 'basic' });
+  }
+  hits.sort((a, b) => a.s - b.s || (a.src === b.src ? 0 : a.src === 'official' ? -1 : 1) || a.name.length - b.name.length);
+  hits.forEach(push);
   return out.slice(0, limit);
 }

@@ -4,7 +4,7 @@ import { getDay, updateDay, getMasters, getDaysInRange, uid } from '../store.js'
 import { fmtKey, addDays, todayKey, nowHM, minutesToText, sleepMinutes } from '../date.js';
 import { MEAL_TYPES, SATIETY, RATINGS, EXERCISE_TYPES } from '../defaults.js';
 import { slotGroups, setsForSlot, pieFor, setRow, medsSheet } from '../meds.js';
-import { searchFoods } from '../foods.js';
+import { searchFoods, loadOfficialFoods } from '../foods.js';
 import { getAllDays } from '../store.js';
 import { syncEnabled, getSession, getStatus, syncNow } from '../sync.js';
 
@@ -374,15 +374,18 @@ function mealSheet(doc, m, ctx, type) {
   const kcal = input({ type: 'number', inputmode: 'numeric', placeholder: 'kcal' });
   const suggest = h('div', { class: 'suggest', hidden: true });
   let history = [];
+  let picked = null; // 후보에서 고른 음식 (탄단지 저장용)
   foodHistory().then((hh) => { history = hh; });
+  loadOfficialFoods().then(() => { if (document.activeElement === name && name.value.trim()) showSuggest(); });
   let sTimer;
   const showSuggest = () => {
     const list = searchFoods(name.value, history);
     suggest.replaceChildren(...list.map((f) => h('button', { class: 'suggest-item', onpointerdown: (e) => e.preventDefault(), onclick: () => {
-      name.value = f.name; kcal.value = f.kcal; suggest.replaceChildren(); kcal.focus();
+      name.value = f.name; kcal.value = f.kcal; picked = f; suggest.replaceChildren(); suggest.hidden = true; kcal.focus();
     } },
-      h('span', { class: 'grow' }, f.mine ? '★ ' : '', f.name),
-      h('span', { class: 'muted small' }, f.serving),
+      h('span', { class: 'grow' }, f.mine ? '★ ' : '', f.name,
+        f.src === 'official' ? h('span', { class: 'src-tag' }, '식약처') : null),
+      h('span', { class: 'muted small' }, f.serving ?? ''),
       h('b', null, `${f.kcal}`))));
     suggest.hidden = list.length === 0;
   };
@@ -451,7 +454,10 @@ function mealSheet(doc, m, ctx, type) {
           editing && h('button', { class: 'btn secondary', onclick: () => { resetForm(); sh.refresh(); } }, '취소'),
           h('button', { class: 'btn grow', id: 'meal-save-btn', onclick: async () => {
             if (!name.value.trim()) { sh.close(); return; }
-            const rec = { id: editing?.id ?? uid(), at: editing?.at ?? nowHM(), type: type.key, presetId, name: name.value.trim(), kcal: numOr(kcal.value), satiety, note: note.value.trim() || null, photo, source: 'manual' };
+            const fromPick = picked && picked.name === name.value.trim() && picked.src === 'official';
+            const rec = { id: editing?.id ?? uid(), at: editing?.at ?? nowHM(), type: type.key, presetId, name: name.value.trim(), kcal: numOr(kcal.value), satiety, note: note.value.trim() || null, photo, source: 'manual',
+              ...(fromPick ? { carb: picked.carb ?? null, protein: picked.protein ?? null, fat: picked.fat ?? null, serving: picked.serving ?? null, foodSrc: 'mfds' } : {}) };
+            picked = null;
             await updateDay(ctx.day, (d) => { const i = d.meals.findIndex((y) => y.id === rec.id); if (i >= 0) d.meals[i] = rec; else d.meals.push(rec); });
             doc = await getDay(ctx.day); historyCache = null; foodHistory().then((hh) => { history = hh; }); resetForm(); sh.refresh(); toast('저장했어요');
           } }, editing ? '수정 저장' : (name.value.trim() ? '기록' : '닫기'))),

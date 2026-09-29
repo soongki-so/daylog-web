@@ -122,6 +122,7 @@ hr.sep { border: 0; border-top: 1px solid var(--line); margin: 12px 0; }
 .suggest-item:last-child { border-bottom: 0; }
 .suggest-item:active { background: var(--sun-soft); }
 .suggest-item b { min-width: 40px; text-align: right; }
+.src-tag { display: inline-block; margin-left: 6px; font-size: 10px; font-weight: 700; color: #2F6FA8; background: var(--sky-soft); border-radius: 6px; padding: 1px 5px; vertical-align: 1px; }
 
 /* ---------- 오늘: 약 / 투약 / 태그 / 평가 ---------- */
 .med-group { margin-bottom: 6px; }
