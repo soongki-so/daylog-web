@@ -109,7 +109,10 @@ async function rest(path, { method = 'GET', body, prefer } = {}) {
   } catch { throw new Error('서버에 연결하지 못했어요. 인터넷 연결을 확인해 주세요.'); }
   if (!res.ok) {
     const j = await res.json().catch(() => ({}));
-    throw new Error(j.message || `동기화 서버 오류 (${res.status})`);
+    if (j.code === '42501' || /permission denied/i.test(j.message ?? '')) throw new Error('서버 권한 설정이 아직 안 됐어요. Supabase SQL Editor에서 grant 세 줄을 실행해 주세요.');
+    if (j.code === '42P01' || j.code === 'PGRST205') throw new Error('서버에 기록용 표가 없어요. Supabase SQL Editor에서 표 만드는 SQL을 실행해 주세요.');
+    if (res.status === 401 || /JWT|jwt/.test(j.message ?? '')) throw new Error('로그인이 만료됐거나 올바르지 않아요. 로그아웃 후 다시 로그인해 주세요.');
+    throw new Error(`${j.message || '동기화 서버 오류'} (${res.status}${j.code ? ' ' + j.code : ''})`);
   }
   if (res.status === 204) return null;
   const text = await res.text();
