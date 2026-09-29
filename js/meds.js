@@ -70,12 +70,34 @@ export function setRow(doc, ctx, set, slot, onChange) {
     h('div', { class: 'row', style: 'margin-bottom:6px' },
       medPie(set, done, set.items.length, 20),
       h('b', { class: 'grow' }, set.name, h('span', { class: 'muted small', style: 'font-weight:500' }, ` ${done}/${set.items.length}`)),
-      h('button', { class: 'btn sm ' + (all ? 'secondary' : ''), onclick: async (e) => { e.stopPropagation(); await setAllItems(ctx.day, set, slot, !all); onChange?.(); } }, all ? '모두 해제' : '모두 먹음')),
+      h('button', { class: 'btn sm ' + (all ? 'secondary' : ''), onclick: (e) => {
+        e.stopPropagation();
+        if (isDoubleTap(`${set.id}|${slot}|all`)) return;
+        setAllItems(ctx.day, set, slot, !all).then(() => onChange?.());
+      } }, all ? '모두 해제' : '모두 먹음')),
     h('div', { class: 'chips' }, set.items.map((it) => {
       const on = taken.includes(it.id);
-      return h('button', { class: `chip pill ${kindClass(set)}${on ? ' on' : ''}`, onclick: async (e) => { e.stopPropagation(); await toggleItem(ctx.day, set.id, slot, it.id); onChange?.(); } },
+      return h('button', { class: `chip pill med-item ${kindClass(set)}${on ? ' on' : ''}`, onclick: (e) => {
+        e.stopPropagation();
+        if (isDoubleTap(`${set.id}|${slot}|${it.id}`)) return;
+        // 누르는 즉시 표시를 바꾸고, 저장이 끝나면 전체를 다시 그림
+        const btn = e.currentTarget;
+        const nowOn = !btn.classList.contains('on');
+        btn.classList.toggle('on', nowOn);
+        btn.querySelector('.pill-dot')?.classList.toggle('on', nowOn);
+        toggleItem(ctx.day, set.id, slot, it.id).then(() => onChange?.());
+      } },
         h('span', { class: `pill-dot ${kindClass(set)}${on ? ' on' : ''}` }), ' ', it.name, it.dose ? h('span', { class: 'muted small' }, ` ${it.dose}`) : null);
     })));
+}
+
+// 아이폰에서 한 번 누른 게 두 번으로 들어오는 것 막기 (화면을 다시 그려도 기억되도록 바깥에 보관)
+const lastTap = new Map();
+function isDoubleTap(key, ms = 450) {
+  const now = Date.now();
+  const prev = lastTap.get(key) ?? 0;
+  lastTap.set(key, now);
+  return now - prev < ms;
 }
 
 // 오늘 화면 약 카드 탭 → 세부 시트

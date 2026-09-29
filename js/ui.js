@@ -47,7 +47,17 @@ export function openSheet({ title, render, onClose }) {
         h('h2', null, title),
         h('button', { class: 'icon-btn plain', onclick: close, 'aria-label': '닫기' }, '✕')),
       body));
-  const api = { close, refresh: async () => { body.replaceChildren(); const r = await render(api); if (r) body.append(r); } };
+  // 새 내용을 다 만든 뒤 한 번에 바꿔 끼움 → 깜빡임·스크롤 튐·겹침 방지
+  let seq = 0;
+  const api = { close, refresh: async () => {
+    const mine = ++seq;
+    const r = await render(api);
+    if (mine !== seq || closed) return; // 더 최근 새로고침이 있으면 이건 버림
+    const sheet = overlay.querySelector('.sheet');
+    const top = sheet ? sheet.scrollTop : 0;
+    body.replaceChildren(...(r ? [r] : []));
+    if (sheet) sheet.scrollTop = top;
+  } };
   api.refresh();
   root.append(overlay);
   sheetCount++;
