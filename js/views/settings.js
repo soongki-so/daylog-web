@@ -63,7 +63,11 @@ function syncCard(ctx) {
       h('div', { class: 'grid2' },
         h('button', { class: 'btn', onclick: async (e) => {
           e.target.disabled = true; e.target.textContent = '동기화 중…';
-          try { const r = await syncNow(); toast(r.changed ? `새 기록 ${r.changed}건 받았어요` : '최신 상태예요'); }
+          try {
+            const r = await syncNow();
+            const parts = [r.uploaded ? `${r.uploaded}일치 올림` : null, r.changed ? `${r.changed}건 받음` : null].filter(Boolean);
+            toast(parts.length ? `동기화 완료: ${parts.join(', ')}` : '이미 최신 상태예요');
+          }
           catch (err) { alert('동기화 실패: ' + err.message); }
           ctx.goTab('settings');
         } }, '지금 동기화'),

@@ -217,7 +217,7 @@ async function firstSync() {
   const d = readDirty();
   for (const doc of local) {
     const r = remoteDays?.[doc.day];
-    if (!r || (doc.updatedAt ?? '') > r) d.days[doc.day] = Date.now();
+    if (!r || newer(doc.updatedAt, r)) d.days[doc.day] = Date.now();
   }
   if (!hadMasters) d.masters = Date.now();
   ls.set(K.dirty, d);
@@ -225,9 +225,25 @@ async function firstSync() {
   return { uploaded: Object.keys(d.days).length };
 }
 
+// "지금 동기화": 서버 목록(날짜와 수정 시각만)과 기기 기록을 전부 비교해
+// 서버에 없거나 기기 쪽이 더 최신인 기록을 올린 뒤, 서버의 새 기록을 받는다.
+const newer = (a, b) => new Date(a ?? 0).getTime() > new Date(b ?? 0).getTime();
 export async function syncNow() {
+  const remote = (await rest('days?select=day,updated_at,doc_updated:data->>updatedAt')) ?? [];
+  const map = Object.fromEntries(remote.map((r) => [r.day, r.doc_updated ?? r.updated_at]));
+  const local = await getAllDays();
+  const d = readDirty();
+  for (const doc of local) {
+    if (!map[doc.day] || newer(doc.updatedAt, map[doc.day])) d.days[doc.day] = Date.now();
+  }
+  const ms = (await rest('masters?select=updated_at,doc_updated:data->>updatedAt')) ?? [];
+  const m = await getMasters();
+  if (!ms.length || newer(m.updatedAt, ms[0].doc_updated ?? ms[0].updated_at)) d.masters = Date.now();
+  ls.set(K.dirty, d);
+  const uploaded = Object.keys(d.days).length;
   await push();
-  return pull();
+  const r = await pull();
+  return { ...r, uploaded };
 }
 
 // ---- 시작 ----
