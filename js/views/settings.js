@@ -2,6 +2,7 @@
 import { h, openSheet, toast, numOr, field, input, select, inbodyCsvPicker, healthImportAction } from '../ui.js';
 import { getMasters, updateMasters, exportAll, importAll, resetAll, uid } from '../store.js';
 import { MEAL_TYPES, MED_SLOTS } from '../defaults.js';
+import { syncEnabled, getSession, signIn, signUp, signOut, syncNow, lastSyncAt, getStatus, pendingCount } from '../sync.js';
 
 export async function renderSettings(root, ctx) {
   const m = await getMasters();
@@ -10,6 +11,8 @@ export async function renderSettings(root, ctx) {
       h('button', { class: 'icon-btn', onclick: () => ctx.goTab('today') }, '‹'),
       h('h1', null, '설정'),
       h('span', { style: 'width:36px' })),
+
+    syncCard(ctx),
 
     section('🍽️ 식사 프리셋', '자주 먹는 식사를 등록해 두면 한 번에 기록', m.presets.sort((a, b) => a.order - b.order).map((p) =>
       item(`${p.favorite ? '★ ' : ''}${p.name}`, [p.kcal ? `${p.kcal} kcal` : null, p.items].filter(Boolean).join(' · '), () => presetSheet(m, p))),
@@ -25,8 +28,70 @@ export async function renderSettings(root, ctx) {
 
     goalsCard(m),
     ...dataCard(),
-    h('div', { class: 'muted small', style: 'text-align:center;margin-top:8px' }, 'DayLog · 1단계 (이 기기에만 저장)'),
+    h('div', { class: 'muted small', style: 'text-align:center;margin-top:8px' }, getSession() ? `DayLog · ${getSession().email} 계정과 동기화` : 'DayLog · 이 기기에만 저장 중'),
   );
+}
+
+// ---------- 기기 간 동기화 (계정) ----------
+function fmtAgo(iso) {
+  if (!iso) return '아직 없음';
+  const s = Math.round((Date.now() - new Date(iso).getTime()) / 1000);
+  if (s < 60) return '방금 전';
+  if (s < 3600) return `${Math.round(s / 60)}분 전`;
+  if (s < 86400) return `${Math.round(s / 3600)}시간 전`;
+  return new Date(iso).toLocaleString('ko-KR');
+}
+
+function syncCard(ctx) {
+  const card = h('div', { class: 'card' });
+  const title = h('div', { class: 'card-title' }, h('span', null, '☁️ 기기 간 동기화'));
+  if (!syncEnabled()) {
+    card.append(title, h('div', { class: 'muted small' }, '동기화 서버를 연결하는 중이에요. 준비되면 여기서 로그인할 수 있어요. 지금은 이 기기에만 저장됩니다.'));
+    return card;
+  }
+  const s = getSession();
+  if (s) {
+    const st = getStatus();
+    const pending = pendingCount();
+    card.append(title,
+      h('div', { class: 'row', style: 'margin-bottom:6px' }, h('span', { class: 'grow' }, h('b', null, s.email)), h('span', { class: 'muted small' }, '로그인됨')),
+      h('div', { class: 'muted small', style: 'margin-bottom:10px' },
+        `마지막 동기화: ${fmtAgo(lastSyncAt())}`,
+        pending ? ` · 올릴 기록 ${pending}건` : '',
+        st.state === 'error' ? h('div', { style: 'color:var(--danger)' }, st.message) : null),
+      h('div', { class: 'muted small', style: 'margin-bottom:10px' }, '핸드폰·아이패드·컴퓨터에서 같은 계정으로 로그인하면 기록이 자동으로 맞춰져요. 같은 날을 두 기기에서 고치면 나중에 고친 쪽이 남아요.'),
+      h('div', { class: 'grid2' },
+        h('button', { class: 'btn', onclick: async (e) => {
+          e.target.disabled = true; e.target.textContent = '동기화 중…';
+          try { const r = await syncNow(); toast(r.changed ? `새 기록 ${r.changed}건 받았어요` : '최신 상태예요'); }
+          catch (err) { alert('동기화 실패: ' + err.message); }
+          ctx.goTab('settings');
+        } }, '지금 동기화'),
+        h('button', { class: 'btn secondary', onclick: () => {
+          if (!confirm('로그아웃할까요? 이 기기의 기록은 그대로 남아요.')) return;
+          signOut(); ctx.goTab('settings');
+        } }, '로그아웃')));
+    return card;
+  }
+  const email = input({ type: 'email', placeholder: '이메일', autocomplete: 'email', id: 'sync-email' });
+  const pw = input({ type: 'password', placeholder: '비밀번호 (6자 이상)', autocomplete: 'current-password', id: 'sync-pw' });
+  const go = (fn, label) => async (e) => {
+    if (!email.value.trim() || pw.value.length < 6) return toast('이메일과 6자 이상 비밀번호를 넣어 주세요');
+    const btn = e.target; btn.disabled = true; const old = btn.textContent; btn.textContent = `${label} 중…`;
+    try {
+      const r = await fn(email.value.trim(), pw.value);
+      toast(r?.uploaded ? `로그인했어요. 이 기기 기록 ${r.uploaded}건을 올렸어요` : '로그인했어요');
+      ctx.goTab('settings');
+    } catch (err) { alert(err.message); btn.disabled = false; btn.textContent = old; }
+  };
+  card.append(title,
+    h('div', { class: 'muted small', style: 'margin-bottom:10px' }, '계정을 만들면 핸드폰·아이패드·컴퓨터에서 같은 기록을 보고 입력할 수 있어요. 처음 로그인하면 이 기기에 있던 기록이 계정으로 올라가요.'),
+    field('이메일', email),
+    field('비밀번호', pw),
+    h('div', { class: 'grid2' },
+      h('button', { class: 'btn', onclick: go(signIn, '로그인') }, '로그인'),
+      h('button', { class: 'btn secondary', onclick: go(signUp, '가입') }, '처음이면 가입')));
+  return card;
 }
 
 function section(title, sub, items, onAdd) {

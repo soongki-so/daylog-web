@@ -5,6 +5,7 @@ import { renderToday } from './views/today.js';
 import { renderCalendar } from './views/calendar.js';
 import { renderTrends } from './views/trends.js';
 import { renderSettings } from './views/settings.js';
+import { startSync } from './sync.js';
 
 const state = { tab: 'today', day: null };
 const view = document.getElementById('view');
@@ -67,6 +68,7 @@ async function importFromHash() {
 }
 
 (async () => {
+  startSync();
   await importFromHash();
   await ctx.goToday();
   state._lastToday = state.day;
