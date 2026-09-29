@@ -21,20 +21,46 @@ const ctx = {
 
 const views = { today: renderToday, calendar: renderCalendar, trends: renderTrends, settings: renderSettings };
 
+// 넓은 화면(컴퓨터·아이패드 가로)에서는 오늘 · 달력 · 변화를 나란히 보여 준다
+const wideMQ = window.matchMedia('(min-width: 1100px)');
+let cols = null;
+function ensureLayout() {
+  const wide = wideMQ.matches;
+  document.getElementById('app').classList.toggle('wide', wide);
+  if (wide && !cols) {
+    const mk = (name) => { const el = document.createElement('section'); el.className = `col col-${name}`; return el; };
+    cols = { main: mk('main'), cal: mk('cal'), trends: mk('trends') };
+    view.replaceChildren(cols.main, cols.cal, cols.trends);
+  } else if (!wide && cols) {
+    cols = null;
+    view.replaceChildren();
+  }
+  return wide;
+}
+
 let rendering = false, pending = false;
 async function render() {
   if (rendering) { pending = true; return; }
   rendering = true;
   try {
     tabsEl.querySelectorAll('.tab').forEach((b) => b.classList.toggle('active', b.dataset.tab === state.tab));
-    const y = window.scrollY;
-    await views[state.tab](view, ctx);
-    window.scrollTo(0, y);
+    if (ensureLayout()) {
+      const tops = [cols.main.scrollTop, cols.cal.scrollTop, cols.trends.scrollTop];
+      await views[state.tab === 'settings' ? 'settings' : 'today'](cols.main, ctx);
+      await renderCalendar(cols.cal, ctx);
+      await renderTrends(cols.trends, ctx);
+      [cols.main.scrollTop, cols.cal.scrollTop, cols.trends.scrollTop] = tops;
+    } else {
+      const y = window.scrollY;
+      await views[state.tab](view, ctx);
+      window.scrollTo(0, y);
+    }
   } finally {
     rendering = false;
     if (pending) { pending = false; render(); }
   }
 }
+wideMQ.addEventListener('change', () => render());
 
 tabsEl.addEventListener('click', (e) => {
   const b = e.target.closest('.tab');

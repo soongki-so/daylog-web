@@ -2,8 +2,10 @@
 import { svg } from './ui.js';
 
 function dims() {
-  const view = document.getElementById('view');
-  const W = Math.max(300, Math.min((view?.clientWidth ?? 400) - 64, 720));
+  // 넓은 화면 3단 배치에서는 '변화' 칸 폭에 맞춘다
+  const host = document.querySelector('#app.wide .col-trends') || document.getElementById('view');
+  const pad = host?.classList?.contains('col') ? 34 : 64;
+  const W = Math.max(280, Math.min((host?.clientWidth ?? 400) - pad, 720));
   const H = Math.round(Math.max(180, Math.min(W * 0.55, 260)));
   return { W, H, PAD: { l: 40, r: 10, t: 14, b: 26 } };
 }
