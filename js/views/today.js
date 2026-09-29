@@ -6,6 +6,27 @@ import { MEAL_TYPES, SATIETY, RATINGS, EXERCISE_TYPES } from '../defaults.js';
 import { slotGroups, setsForSlot, pieFor, setRow, medsSheet } from '../meds.js';
 import { searchFoods } from '../foods.js';
 import { getAllDays } from '../store.js';
+import { syncEnabled, getSession, getStatus, syncNow } from '../sync.js';
+
+// 오늘 화면 머리의 로그인·동기화 상태 (누르면 바로 동기화, 로그인 전이면 설정으로)
+export function syncBadge(ctx) {
+  if (!syncEnabled()) return null;
+  const s = getSession();
+  const st = getStatus();
+  const state = !s ? 'off' : st.state === 'error' ? 'err' : st.state === 'syncing' ? 'busy' : 'on';
+  const label = { off: '로그인 안 됨 (눌러서 로그인)', err: `동기화 오류: ${st.message}`, busy: '동기화 중', on: `${s?.email ?? ''} 동기화됨` }[state];
+  return h('button', {
+    id: 'sync-badge', class: `sync-badge ${state}`, title: label, 'aria-label': label,
+    onclick: async () => {
+      if (!s) { ctx.goTab('settings'); return; }
+      try {
+        const r = await syncNow();
+        const parts = [r.uploaded ? `${r.uploaded}일치 올림` : null, r.changed ? `${r.changed}건 받음` : null].filter(Boolean);
+        toast(parts.length ? `동기화 완료: ${parts.join(', ')}` : '이미 최신 상태예요');
+      } catch (err) { alert('동기화 실패: ' + err.message); }
+    },
+  }, '☁️', h('span', { class: 'dot' }));
+}
 
 export async function renderToday(root, ctx) {
   const [doc, m] = await Promise.all([getDay(ctx.day), getMasters()]);
@@ -39,6 +60,7 @@ function header(ctx, m) {
       h('button', { class: 'icon-btn', onclick: () => { ctx.setDay(addDays(ctx.day, -1)); ctx.goTab('today'); }, 'aria-label': '이전 날' }, '‹'),
       !isToday && h('button', { class: 'btn sm secondary', onclick: () => { ctx.setDay(today); ctx.goTab('today'); } }, '오늘'),
       h('button', { class: 'icon-btn', onclick: () => { ctx.setDay(addDays(ctx.day, 1)); ctx.goTab('today'); }, 'aria-label': '다음 날' }, '›'),
+      syncBadge(ctx),
       h('button', { class: 'icon-btn', onclick: () => healthImportAction(ctx), 'aria-label': '건강 앱 데이터 가져오기', title: '건강 앱 데이터 가져오기 (클립보드)' }, '🍎'),
       h('button', { class: 'icon-btn', onclick: () => ctx.goTab('settings'), 'aria-label': '설정' }, '⚙️')));
 }
@@ -323,12 +345,14 @@ function mealsSection(doc, m, ctx) {
         const faceOf = (x) => (x.satiety ? SATIETY.find((s) => s.v === x.satiety)?.face ?? '' : '');
         const slotSets = setsForSlot(m, t.key);
         return h('div', { class: 'meal-slot' + (entries.length ? ' filled' : ''), onclick: () => mealSheet(doc, m, ctx, t) },
-          h('div', { class: 't' }, `${t.icon} ${t.label}`, slotSets.length ? h('span', { class: 'med-dots' }, slotSets.map((set) => pieFor(doc, set, t.key, 14))) : null),
+          h('div', { class: 't' }, `${t.icon} ${t.label}`),
           entries.length
             ? [h('div', { class: 'n' }, entries.map((x, i) => [i ? ', ' : '', x.name, faceOf(x) ? h('span', { class: 'sat-face' }, ' ' + faceOf(x)) : null])),
                h('div', { class: 'k' }, kcal ? `${fmtKcal(kcal)} kcal` : ''),
                entries.some((x) => x.photo) && h('div', { class: 'thumbs' }, entries.filter((x) => x.photo).slice(0, 3).map((x) => h('img', { src: x.photo, class: 'thumb' })))]
-            : h('div', { class: 'add' }, '+'));
+            : h('div', { class: 'add' }, '+'),
+          // 약·영양제는 칸 아래쪽 한 줄에 따로 (글자와 섞이지 않게)
+          slotSets.length ? h('div', { class: 'slot-meds' }, slotSets.map((set) => pieFor(doc, set, t.key, 14))) : null);
       })));
 }
 

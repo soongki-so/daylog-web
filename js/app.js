@@ -5,7 +5,8 @@ import { renderToday } from './views/today.js';
 import { renderCalendar } from './views/calendar.js';
 import { renderTrends } from './views/trends.js';
 import { renderSettings } from './views/settings.js';
-import { startSync } from './sync.js';
+import { startSync, onSyncStatus } from './sync.js';
+import { syncBadge } from './views/today.js';
 
 const state = { tab: 'today', day: null };
 const view = document.getElementById('view');
@@ -43,6 +44,13 @@ tabsEl.addEventListener('click', (e) => {
 });
 
 onChange(() => render());
+
+// 동기화 상태가 바뀌면 머리의 표시만 바꿔 끼움 (화면 전체를 다시 그리지 않아 입력 중인 칸이 유지됨)
+onSyncStatus(() => {
+  const old = document.getElementById('sync-badge');
+  const next = syncBadge(ctx);
+  if (old && next) old.replaceWith(next);
+});
 
 // 자정이 지나면 "오늘"을 갱신
 document.addEventListener('visibilitychange', async () => {

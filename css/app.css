@@ -1,5 +1,5 @@
 :root {
-  --bg: #FBF8F4;
+  --bg: #E6E2DD;
   --card: #FFFFFF;
   --ink: #2B2B2B;
   --muted: #8A8580;
@@ -107,7 +107,8 @@ hr.sep { border: 0; border-top: 1px solid var(--line); margin: 12px 0; }
 /* ---------- 오늘: 식사 ---------- */
 .meals { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
 .meal-slot { border-radius: 14px; background: #FBF8F4; padding: 10px 8px; min-height: 92px; display: flex; flex-direction: column; gap: 4px; cursor: pointer; }
-.meal-slot .t { font-size: 12px; color: var(--muted); font-weight: 600; }
+.meal-slot .t { font-size: 12px; color: var(--muted); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.slot-meds { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin-top: auto; padding-top: 6px; border-top: 1px dashed rgba(60, 40, 20, 0.12); }
 .meal-slot .n { font-size: 13px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
 .meal-slot .k { font-size: 11px; color: var(--muted); }
 .meal-slot .add { color: var(--accent); font-size: 22px; line-height: 1; margin: auto; }
@@ -140,7 +141,16 @@ hr.sep { border: 0; border-top: 1px solid var(--line); margin: 12px 0; }
 .medset:last-child { border-bottom: 0; }
 .sat-face { font-size: 13px; }
 .pt-badge { display: inline-block; font-size: 11px; font-weight: 700; color: #6B4FBB; background: var(--lav-soft); border-radius: 99px; padding: 1px 7px; }
-.meal-slot .t { display: flex; align-items: center; }
+/* 오늘 화면 머리: 로그인·동기화 상태 */
+.sync-badge { position: relative; display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px; border-radius: 50%; background: #F4F0EA; font-size: 16px; flex: none; }
+.sync-badge .dot { position: absolute; top: 3px; right: 2px; width: 10px; height: 10px; border-radius: 50%; border: 2px solid #fff; background: #B8B2AA; }
+.sync-badge.on .dot { background: #3FA97B; }
+.sync-badge.err .dot { background: var(--danger); }
+.sync-badge.busy .dot { background: var(--sun); animation: pulse 1s infinite; }
+.sync-badge.off { opacity: 0.55; }
+.day-header h1, .day-header .sub { white-space: nowrap; }
+@keyframes pulse { 50% { opacity: 0.3; } }
+@media (prefers-reduced-motion: reduce) { .sync-badge.busy .dot { animation: none; } }
 .med-row { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--line); cursor: pointer; }
 .med-row:last-child { border-bottom: 0; }
 .check { width: 24px; height: 24px; border-radius: 8px; border: 2px solid #D9D2C8; display: inline-flex; align-items: center; justify-content: center; font-size: 14px; color: #fff; }
