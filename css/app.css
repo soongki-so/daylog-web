@@ -152,6 +152,9 @@ hr.sep { border: 0; border-top: 1px solid var(--line); margin: 12px 0; }
 .sync-badge.off { opacity: 0.55; }
 .day-header h1, .day-header .sub { white-space: nowrap; }
 
+/* Netlify가 자동으로 붙이는 'Powered by Netlify' 배지 숨김 (설정에서도 끌 수 있는 표시) */
+#nl-badge-frame, iframe[title="Powered by Netlify"] { display: none !important; }
+
 /* ---------- 넓은 화면: 오늘 · 달력 · 변화 3단 ---------- */
 #app.wide { max-width: 1680px; }
 #app.wide .tabs { display: none; }
