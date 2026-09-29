@@ -3,9 +3,12 @@ import { h, openSheet, toast, numOr, field, input, select, inbodyCsvPicker, heal
 import { getMasters, updateMasters, exportAll, importAll, resetAll, uid } from '../store.js';
 import { MEAL_TYPES, MED_SLOTS } from '../defaults.js';
 import { syncEnabled, getSession, signIn, signUp, signOut, syncNow, lastSyncAt, getStatus, pendingCount } from '../sync.js';
+import { ptProgress } from './today.js';
+import { todayKey } from '../date.js';
 
 export async function renderSettings(root, ctx) {
   const m = await getMasters();
+  const pt = await ptProgress(todayKey(m.settings.dayBoundaryHour), m.settings);
   root.replaceChildren(
     h('div', { class: 'cal-head' },
       h('button', { class: 'icon-btn', onclick: () => ctx.goTab('today') }, '‹'),
@@ -13,6 +16,7 @@ export async function renderSettings(root, ctx) {
       h('span', { style: 'width:36px' })),
 
     syncCard(ctx),
+    ptCard(m, pt),
 
     section('🍽️ 식사 프리셋', '자주 먹는 식사를 등록해 두면 한 번에 기록', m.presets.sort((a, b) => a.order - b.order).map((p) =>
       item(`${p.favorite ? '★ ' : ''}${p.name}`, [p.kcal ? `${p.kcal} kcal` : null, p.items].filter(Boolean).join(' · '), () => presetSheet(m, p))),
@@ -203,16 +207,12 @@ function goalsCard(m) {
   const injName = input({ type: 'text', value: s.injectionName });
   const injMg = input({ type: 'number', step: '0.5', inputmode: 'decimal', value: s.injectionDefaultMg });
   const boundary = select([0, 2, 3, 4, 5].map((hh) => ({ value: String(hh), label: hh === 0 ? '자정 (00:00)' : `새벽 ${hh}시` })), String(s.dayBoundaryHour));
-  const ptTotal = input({ type: 'number', inputmode: 'numeric', value: s.ptTotal ?? 30 });
-  const ptDone = input({ type: 'number', inputmode: 'numeric', value: s.ptDone ?? 0 });
   return h('div', { class: 'card' },
     h('div', { class: 'card-title' }, h('span', null, '🎯 목표 · 기본값')),
     h('div', { class: 'grid2' }, field('물 목표 (ml)', water), field('물 빠른 버튼', quick)),
     field('안정시 에너지 (kcal/일)', resting),
     h('div', { class: 'muted small', style: 'margin:-6px 0 12px' }, '가만히 있어도 쓰는 에너지. 건강 앱 "안정시 에너지" 값을 넣으면 정확해요.'),
     h('div', { class: 'grid2' }, field('투약 약 이름', injName), field('기본 용량 (mg)', injMg)),
-    h('div', { class: 'grid2' }, field('PT 총 횟수 (회)', ptTotal), field('앱 쓰기 전 완료한 PT (회)', ptDone)),
-    h('div', { class: 'muted small', style: 'margin:-6px 0 12px' }, '운동 기록에서 "PT 수업"을 고르면 회차가 자동으로 이어져요.'),
     field('하루 시작 시각', boundary),
     h('div', { class: 'muted small', style: 'margin:-6px 0 12px' }, '새벽 야식을 전날로 치고 싶으면 새벽 시각으로.'),
     h('button', { class: 'btn block', onclick: async () => {
@@ -224,10 +224,29 @@ function goalsCard(m) {
         mm.settings.injectionName = injName.value.trim() || '마운자로';
         mm.settings.injectionDefaultMg = numOr(injMg.value, 2.5);
         mm.settings.dayBoundaryHour = numOr(boundary.value, 0);
+      });
+      toast('저장했어요');
+    } }, '저장'));
+}
+
+// ---------- PT 수업 횟수 ----------
+function ptCard(m, pt) {
+  const s = m.settings;
+  const ptTotal = input({ type: 'number', inputmode: 'numeric', value: s.ptTotal ?? 30, id: 'pt-total' });
+  const ptDone = input({ type: 'number', inputmode: 'numeric', value: s.ptDone ?? 0, id: 'pt-done' });
+  const total = s.ptTotal ?? 30;
+  return h('div', { class: 'card', id: 'pt-card' },
+    h('div', { class: 'card-title' }, h('span', null, '🏋️ PT 수업'), h('span', { class: 'pt-badge' }, `${pt.upTo}/${total}회`)),
+    h('div', { class: 'muted small', style: 'margin-bottom:10px' },
+      `지금까지 ${pt.upTo}회 (앱 쓰기 전 ${s.ptDone ?? 0}회 + 앱에 기록 ${pt.upTo - (s.ptDone ?? 0)}회) · 남은 수업 ${Math.max(0, total - pt.upTo)}회`),
+    h('div', { class: 'grid2' }, field('등록한 총 횟수 (회)', ptTotal), field('앱 쓰기 전에 한 횟수 (회)', ptDone)),
+    h('div', { class: 'muted small', style: 'margin:-6px 0 12px' }, '운동 기록에서 "PT 수업"을 고르면 회차가 자동으로 이어져요. 재등록하면 총 횟수를 늘리세요.'),
+    h('button', { class: 'btn block', onclick: async () => {
+      await updateMasters((mm) => {
         mm.settings.ptTotal = numOr(ptTotal.value, 30);
         mm.settings.ptDone = numOr(ptDone.value, 0);
       });
-      toast('저장했어요');
+      toast('PT 횟수를 저장했어요');
     } }, '저장'));
 }
 
