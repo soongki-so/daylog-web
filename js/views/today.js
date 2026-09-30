@@ -7,6 +7,7 @@ import { slotGroups, setsForSlot, pieFor, setRow, medsSheet } from '../meds.js';
 import { searchFoods, loadOfficialFoods } from '../foods.js';
 import { getAllDays } from '../store.js';
 import { syncEnabled, getSession, getStatus, syncNow } from '../sync.js';
+import { guidanceFor, daySheet } from '../events.js';
 
 // 오늘 화면 머리의 로그인·동기화 상태 (누르면 바로 동기화, 로그인 전이면 설정으로)
 export function syncBadge(ctx) {
@@ -32,8 +33,11 @@ export async function renderToday(root, ctx) {
   const [doc, m] = await Promise.all([getDay(ctx.day), getMasters()]);
   const prevWeight = await findPrevWeight(ctx.day);
   const ptInfo = doc.exercise.some((x) => x.kind === 'pt') ? await ptProgress(ctx.day, m.settings) : null;
+  const guide = await guidanceFor(ctx.day);
   root.replaceChildren(
     header(ctx, m),
+    guide.length ? h('div', { class: 'card guide', onclick: () => daySheet(ctx, ctx.day) },
+      guide.map((g) => h('div', { class: 'guide-line' }, h('span', { class: 'guide-icon' }, g.icon), h('span', null, g.text)))) : null,
     dashboard(doc, m, ctx, prevWeight, ptInfo),
     mealsSection(doc, m, ctx),
     medsSection(doc, m, ctx),

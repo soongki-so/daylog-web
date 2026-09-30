@@ -31,6 +31,7 @@ export function emptyDay(day) {
     meds: {},            // { [setId]: { [slot]: { taken: [itemId], at } } }
     injection: null,     // { doseMg, at, note }
     tags: [],            // [{ tagId, note }]
+    events: [],          // [{ id, kind, title, at, note, status }] 미리 넣는 일정
     updatedAt: null,
   };
 }
