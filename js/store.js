@@ -88,6 +88,7 @@ function mergeDefaults(m) {
     medications: m.medications ?? [],
     medSets: m.medSets ?? migrateSets(m.medications),
     tags: m.tags ?? structuredClone(DEFAULT_MASTERS.tags),
+    classes: Array.isArray(m.classes) ? m.classes : undefined, // 없으면 예전 PT 설정으로 대신 (classes.js)
     settings: { ...DEFAULT_MASTERS.settings, ...(m.settings ?? {}) },
     updatedAt: m.updatedAt ?? null,
   };

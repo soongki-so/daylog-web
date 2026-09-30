@@ -5,6 +5,7 @@ import { monthGrid, monthRange, todayKey, DOW, parseKey, fmtKey, diffDays } from
 import { RATINGS } from '../defaults.js';
 import { injectionSheet, injectionStatus } from './injection.js';
 import { daySheet, eventsOf, shortLabel, kindOf } from '../events.js';
+import { classIdOf, classById } from '../classes.js';
 import { addDays } from '../date.js';
 
 const state = { year: null, month: null };
@@ -32,7 +33,7 @@ export async function renderCalendar(root, ctx) {
       ...(d ? d.tags.slice(0, 2).map((t) => tagById[t.tagId]?.icon ?? '') : []),
       d?.injection ? '💉' : (isNext ? '⏰' : ''),
       d?.weight?.source === 'inbody' ? '📋' : '',
-      d?.exercise?.some((x) => x.kind === 'pt') ? '🏋️' : '',
+      ...(d ? [...new Set(d.exercise.map((x) => classIdOf(x)).filter(Boolean))].slice(0, 2).map((id) => classById(m, id)?.icon ?? '🏋️') : []),
     ].join('');
     const evs = eventsOf(d).slice().sort((a, b) => (a.at ?? '99') < (b.at ?? '99') ? -1 : 1);
     const cls = ['cal-cell', !c.inMonth && 'out', c.key === today && 'today', rating && `r${rating}`, d?.injection && 'inj', isNext && 'inj-next', evs.length && 'has-ev'].filter(Boolean).join(' ');
@@ -62,14 +63,14 @@ export async function renderCalendar(root, ctx) {
       DOW.map((d) => h('div', { class: 'cal-dow' }, d)),
       cells),
     h('div', { class: 'cal-legend' },
-      h('span', null, '날짜를 누르면 일정 추가'), h('span', null, '💉 투약'), h('span', null, '⏰ 투약 예정'), h('span', null, '📋 인바디'), h('span', null, '🏋️ PT')),
+      h('span', null, '날짜를 누르면 일정 추가'), h('span', null, '💉 투약'), h('span', null, '⏰ 투약 예정'), h('span', null, '📋 인바디'), h('span', null, '🏋️ 수업')),
 
     // 다가오는 일정
     h('div', { class: 'card', style: 'margin-top:12px' },
       h('div', { class: 'card-title' }, h('span', null, '📅 다가오는 일정'), h('button', { class: 'link', onclick: () => daySheet(ctx, today, refresh) }, '+ 오늘 일정')),
       upcoming.length ? upcoming.slice(0, 8).map((e) => h('div', { class: 'list-item', onclick: () => daySheet(ctx, e.day, refresh) },
         h('span', { class: 'muted small', style: 'min-width:64px' }, e.day === today ? '오늘' : e.day === addDays(today, 1) ? '내일' : fmtKey(e.day).replace(/^(\d+)월 (\d+)일.*/, '$1/$2')),
-        h('span', { class: 'grow' }, `${kindOf(e.kind).icon} ${e.title}`, e.at ? h('span', { class: 'muted small' }, ` ${e.at}`) : null),
+        h('span', { class: 'grow' }, `${kindOf(e.kind, m, e).icon} ${e.title}`, e.at ? h('span', { class: 'muted small' }, ` ${e.at}`) : null),
         h('span', { class: 'muted' }, '›')))
         : h('div', { class: 'empty' }, '2주 안에 일정이 없어요. 회식·약속·PT를 미리 넣어 두면 전후 식사 안내를 해 드려요.')),
 

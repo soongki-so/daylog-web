@@ -3,12 +3,13 @@ import { h, openSheet, toast, numOr, field, input, select, inbodyCsvPicker, heal
 import { getMasters, updateMasters, exportAll, importAll, resetAll, uid } from '../store.js';
 import { MEAL_TYPES, MED_SLOTS } from '../defaults.js';
 import { syncEnabled, getSession, signIn, signUp, signOut, syncNow, lastSyncAt, getStatus, pendingCount } from '../sync.js';
-import { ptProgress } from './today.js';
+import { allClasses, classProgress, progressText, CLASS_ICONS } from '../classes.js';
 import { todayKey } from '../date.js';
 
 export async function renderSettings(root, ctx) {
   const m = await getMasters();
-  const pt = await ptProgress(todayKey(m.settings.dayBoundaryHour), m.settings);
+  const progress = {};
+  for (const c of allClasses(m)) progress[c.id] = await classProgress(todayKey(m.settings.dayBoundaryHour), c);
   root.replaceChildren(
     h('div', { class: 'cal-head' },
       h('button', { class: 'icon-btn', onclick: () => ctx.goTab('today') }, '‹'),
@@ -16,7 +17,7 @@ export async function renderSettings(root, ctx) {
       h('span', { style: 'width:36px' })),
 
     syncCard(ctx),
-    ptCard(m, pt),
+    classesCard(m, progress),
 
     section('🍽️ 식사 프리셋', '자주 먹는 식사를 등록해 두면 한 번에 기록', m.presets.sort((a, b) => a.order - b.order).map((p) =>
       item(`${p.favorite ? '★ ' : ''}${p.name}`, [p.kcal ? `${p.kcal} kcal` : null, p.items].filter(Boolean).join(' · '), () => presetSheet(m, p))),
@@ -109,9 +110,10 @@ function section(title, sub, items, onAdd) {
     items.length ? items : h('div', { class: 'empty' }, '없음'));
 }
 
-function item(title, sub, onclick) {
+function item(title, sub, onclick, extra = null) {
   return h('div', { class: 'list-item', onclick },
     h('div', { class: 'grow' }, title, sub ? h('div', { class: 'sub' }, sub) : null),
+    extra,
     h('span', { class: 'muted' }, '›'));
 }
 
@@ -229,25 +231,46 @@ function goalsCard(m) {
     } }, '저장'));
 }
 
-// ---------- PT 수업 횟수 ----------
-function ptCard(m, pt) {
-  const s = m.settings;
-  const ptTotal = input({ type: 'number', inputmode: 'numeric', value: s.ptTotal ?? 30, id: 'pt-total' });
-  const ptDone = input({ type: 'number', inputmode: 'numeric', value: s.ptDone ?? 0, id: 'pt-done' });
-  const total = s.ptTotal ?? 30;
-  return h('div', { class: 'card', id: 'pt-card' },
-    h('div', { class: 'card-title' }, h('span', null, '🏋️ PT 수업'), h('span', { class: 'pt-badge' }, `${pt.upTo}/${total}회`)),
-    h('div', { class: 'muted small', style: 'margin-bottom:10px' },
-      `지금까지 ${pt.upTo}회 (앱 쓰기 전 ${s.ptDone ?? 0}회 + 앱에 기록 ${pt.upTo - (s.ptDone ?? 0)}회) · 남은 수업 ${Math.max(0, total - pt.upTo)}회`),
-    h('div', { class: 'grid2' }, field('등록한 총 횟수 (회)', ptTotal), field('앱 쓰기 전에 한 횟수 (회)', ptDone)),
-    h('div', { class: 'muted small', style: 'margin:-6px 0 12px' }, '운동 기록에서 "PT 수업"을 고르면 회차가 자동으로 이어져요. 재등록하면 총 횟수를 늘리세요.'),
-    h('button', { class: 'btn block', onclick: async () => {
-      await updateMasters((mm) => {
-        mm.settings.ptTotal = numOr(ptTotal.value, 30);
-        mm.settings.ptDone = numOr(ptDone.value, 0);
-      });
-      toast('PT 횟수를 저장했어요');
-    } }, '저장'));
+// ---------- 운동 수업 (PT·필라테스·요가 …) ----------
+function classesCard(m, progress) {
+  const list = allClasses(m);
+  return h('div', { class: 'card settings-list', id: 'pt-card' },
+    h('div', { class: 'card-title' }, h('span', null, '🏋️ 운동 수업'), h('button', { class: 'link', onclick: () => classSheet(m, null) }, '+ 추가')),
+    h('div', { class: 'muted small', style: 'margin:-6px 0 8px' }, 'PT·필라테스·요가처럼 회차를 세는 수업. 운동 기록이나 일정에서 고르면 회차가 자동으로 이어져요.'),
+    list.length ? list.map((c) => {
+      const p = progress[c.id];
+      const sub = p ? `${p.upTo}회 했어요${c.total ? ` · 남은 ${p.left}회 (등록 ${c.total}회)` : ''}${c.active === false ? ' · 숨김' : ''}` : '';
+      return item(`${c.icon} ${c.name}`, sub, () => classSheet(m, c), p ? h('span', { class: 'pt-badge' }, progressText(p)) : null);
+    }) : h('div', { class: 'empty' }, '없음'));
+}
+
+function classSheet(m, c) {
+  const name = input({ type: 'text', value: c?.name ?? '', placeholder: '예: PT, 필라테스, 요가, 수영 강습' });
+  const total = input({ type: 'number', inputmode: 'numeric', value: c?.total ?? '', placeholder: '비우면 세지 않음' });
+  const done = input({ type: 'number', inputmode: 'numeric', value: c?.done ?? 0 });
+  const active = h('input', { type: 'checkbox', checked: c ? c.active !== false : true });
+  let icon = c?.icon ?? '🏋️';
+  openSheet({
+    title: c ? '수업 수정' : '수업 추가',
+    render: (sh) => h('div', null,
+      field('수업 이름', name),
+      h('div', { class: 'field' }, h('label', null, '아이콘'),
+        h('div', { class: 'chips' }, CLASS_ICONS.map((ic) => h('button', { class: 'chip' + (icon === ic ? ' on' : ''), onclick: () => { icon = ic; sh.refresh(); } }, ic)))),
+      h('div', { class: 'grid2' }, field('등록한 총 횟수 (회)', total), field('앱 쓰기 전에 한 횟수 (회)', done)),
+      h('div', { class: 'muted small', style: 'margin:-6px 0 12px' }, '총 횟수를 비우면 "12회"처럼 한 횟수만 세요. 재등록하면 총 횟수를 늘리세요.'),
+      h('label', { class: 'row', style: 'margin-bottom:14px' }, active, ' 운동·일정에서 고를 수 있게 표시'),
+      h('div', { class: 'row' },
+        c && h('button', { class: 'btn danger', onclick: async () => {
+          if (!confirm('이 수업을 지울까요? 과거 운동 기록은 남습니다.')) return;
+          await updateMasters((mm) => { mm.classes = allClasses(mm).filter((x) => x.id !== c.id); }); sh.close();
+        } }, '삭제'),
+        h('button', { class: 'btn grow', onclick: async () => {
+          if (!name.value.trim()) return toast('수업 이름을 입력하세요');
+          const rec = { id: c?.id ?? uid(), name: name.value.trim(), icon, total: numOr(total.value), done: numOr(done.value, 0), active: active.checked, order: c?.order ?? (allClasses(m).length + 1) };
+          await updateMasters((mm) => { const list = allClasses(mm); const i = list.findIndex((x) => x.id === rec.id); if (i >= 0) list[i] = rec; else list.push(rec); mm.classes = list; });
+          toast('저장했어요'); sh.close();
+        } }, '저장'))),
+  });
 }
 
 // ---------- 아이폰 건강 앱 연동 (단축어) ----------
