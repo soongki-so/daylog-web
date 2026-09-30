@@ -37,16 +37,17 @@ export const DEFAULT_MASTERS = {
   presets: [
     { id: 'p_shake', name: '아침 쉐이크', items: '단백질 쉐이크, 바나나', kcal: 250, mealType: 'breakfast', favorite: true, order: 1 },
     { id: 'p_salad', name: '점심 샐러드', items: '닭가슴살 샐러드', kcal: 450, mealType: 'lunch', favorite: true, order: 2 },
-    { id: 'p_bodyki', name: '바디키', items: '도시락', kcal: 520, mealType: 'lunch', favorite: true, order: 3 },
+    { id: 'p_box', name: '도시락', items: '', kcal: 500, mealType: 'lunch', favorite: true, order: 3 },
     { id: 'p_normal', name: '일반식', items: '밥, 국, 반찬', kcal: 700, mealType: null, favorite: false, order: 4 },
     { id: 'p_out', name: '외식', items: '', kcal: 900, mealType: null, favorite: false, order: 5 },
   ],
   medications: [],
   medSets: [
+    // 처음 쓰는 사람에게 보이는 예시. 설정에서 자기 약·영양제로 바꾸면 됨
     { id: 's_med_am', name: '아침약', kind: 'medication', slots: ['breakfast'], active: true, order: 1,
-      items: [{ id: 'i_synth', name: '신지로이드' }, { id: 'i_bp', name: '혈압약' }] },
+      items: [{ id: 'i_med1', name: '처방약' }] },
     { id: 's_supp', name: '영양제', kind: 'supplement', slots: ['breakfast'], active: true, order: 2,
-      items: [{ id: 'i_dx', name: '더블엑스' }, { id: 'i_slim', name: '슬림팩' }, { id: 'i_pro', name: '유산균' }] },
+      items: [{ id: 'i_vita', name: '종합비타민' }, { id: 'i_pro', name: '유산균' }] },
   ],
   tags: [
     { id: 't_period', name: '생리', icon: '🩸', active: true, order: 1 },
@@ -61,7 +62,7 @@ export const DEFAULT_MASTERS = {
     waterGoalMl: 2000,
     waterQuick: [200, 300, 500],
     restingEnergy: 1300,
-    injectionName: '마운자로',
+    injectionName: '주사',   // 주 1회 주사약 이름 (설정에서 변경, 예: 마운자로)
     injectionDefaultMg: 2.5,
     dayBoundaryHour: 0,
     ptTotal: 30,   // PT 등록 총 횟수

@@ -221,7 +221,7 @@ function goalsCard(m) {
         mm.settings.waterQuick = quick.value.split(',').map((x) => numOr(x.trim())).filter(Boolean).slice(0, 4);
         if (!mm.settings.waterQuick.length) mm.settings.waterQuick = [200, 300, 500];
         mm.settings.restingEnergy = numOr(resting.value, 1300);
-        mm.settings.injectionName = injName.value.trim() || '마운자로';
+        mm.settings.injectionName = injName.value.trim() || '주사';
         mm.settings.injectionDefaultMg = numOr(injMg.value, 2.5);
         mm.settings.dayBoundaryHour = numOr(boundary.value, 0);
       });
