@@ -9,6 +9,7 @@ import { getAllDays } from '../store.js';
 import { syncEnabled, getSession, getStatus, syncNow } from '../sync.js';
 import { guidanceFor, daySheet, plannedClassEvents, ensureClassExercise, setEventStatus, markClassEventDone } from '../events.js';
 import { activeClasses, classById, classIdOf, classProgress, progressText } from '../classes.js';
+import { drawFace, lookOf } from '../avatar.js';
 
 // 수량 표시: 1 → "1", 0.5 → "0.5", 1.333 → "1.33"
 const fmtQty = (q) => (Number.isInteger(q) ? String(q) : String(Math.round(q * 100) / 100));
@@ -72,9 +73,17 @@ function header(ctx, m) {
       h('button', { class: 'icon-btn', onclick: () => { ctx.setDay(addDays(ctx.day, -1)); ctx.goTab('today'); }, 'aria-label': '이전 날' }, '‹'),
       !isToday && h('button', { class: 'btn sm secondary', onclick: () => { ctx.setDay(today); ctx.goTab('today'); } }, '오늘'),
       h('button', { class: 'icon-btn', onclick: () => { ctx.setDay(addDays(ctx.day, 1)); ctx.goTab('today'); }, 'aria-label': '다음 날' }, '›'),
+      avatarButton(ctx, m),
       syncBadge(ctx),
       h('button', { class: 'icon-btn', onclick: () => healthImportAction(ctx), 'aria-label': '건강 앱 데이터 가져오기', title: '건강 앱 데이터 가져오기 (클립보드)' }, '🍎'),
       h('button', { class: 'icon-btn', onclick: () => ctx.goTab('settings'), 'aria-label': '설정' }, '⚙️')));
+}
+
+// 머리의 작은 캐릭터 얼굴 (누르면 캐릭터 탭)
+function avatarButton(ctx, m) {
+  const c = h('canvas', { width: 60, height: 60 });
+  drawFace(c, { ...lookOf(m), mood: 'happy' });
+  return h('button', { class: 'icon-btn av-face', onclick: () => ctx.goTab('avatar'), 'aria-label': '내 캐릭터', title: '내 캐릭터' }, c);
 }
 
 // ---------- 통합 대시보드 ----------

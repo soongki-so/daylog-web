@@ -66,6 +66,10 @@ export const DEFAULT_MASTERS = {
     exerciseGoalMin: 30,   // 하루 운동 목표(분)
     sleepGoalHours: 7,     // 수면 목표(시간)
     stepsGoal: 8000,       // 걸음 목표 (건강 앱에서 걸음이 들어온 날)
+    heightCm: null,        // 캐릭터 몸 계산용 (BMI)
+    startWeightKg: null,   // 비우면 첫 체중 기록
+    goalWeightKg: null,    // 목표 체중 (캐릭터 목표 모습·진행률)
+    avatarExaggerate: 2,   // 캐릭터 변화 과장 배수 1~3
     injectionName: '주사',   // 주 1회 주사약 이름 (설정에서 변경, 예: 마운자로)
     injectionDefaultMg: 2.5,
     dayBoundaryHour: 0,

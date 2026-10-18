@@ -89,6 +89,7 @@ function mergeDefaults(m) {
     medSets: m.medSets ?? migrateSets(m.medications),
     tags: m.tags ?? structuredClone(DEFAULT_MASTERS.tags),
     classes: Array.isArray(m.classes) ? m.classes : undefined, // 없으면 예전 PT 설정으로 대신 (classes.js)
+    avatar: m.avatar && typeof m.avatar === 'object' ? m.avatar : null, // 캐릭터 꾸미기 (avatar.js DEFAULT_AVATAR 와 합쳐 씀)
     settings: { ...DEFAULT_MASTERS.settings, ...(m.settings ?? {}) },
     updatedAt: m.updatedAt ?? null,
   };

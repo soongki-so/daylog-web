@@ -5,6 +5,7 @@ import { renderToday } from './views/today.js';
 import { renderCalendar } from './views/calendar.js';
 import { renderTrends } from './views/trends.js';
 import { renderSettings } from './views/settings.js';
+import { renderAvatar } from './views/avatar.js';
 import { startSync, onSyncStatus } from './sync.js';
 import { syncBadge } from './views/today.js';
 
@@ -19,7 +20,7 @@ const ctx = {
   async goToday() { const m = await getMasters(); state.day = todayKey(m.settings.dayBoundaryHour); },
 };
 
-const views = { today: renderToday, calendar: renderCalendar, trends: renderTrends, settings: renderSettings };
+const views = { today: renderToday, calendar: renderCalendar, trends: renderTrends, settings: renderSettings, avatar: renderAvatar };
 
 // 넓은 화면(컴퓨터·아이패드 가로)에서는 오늘 · 달력 · 변화를 나란히 보여 준다
 const wideMQ = window.matchMedia('(min-width: 1100px)');
@@ -46,7 +47,7 @@ async function render() {
     tabsEl.querySelectorAll('.tab').forEach((b) => b.classList.toggle('active', b.dataset.tab === state.tab));
     if (ensureLayout()) {
       const tops = [cols.main.scrollTop, cols.cal.scrollTop, cols.trends.scrollTop];
-      await views[state.tab === 'settings' ? 'settings' : 'today'](cols.main, ctx);
+      await views[state.tab === 'settings' || state.tab === 'avatar' ? state.tab : 'today'](cols.main, ctx);
       await renderCalendar(cols.cal, ctx);
       await renderTrends(cols.trends, ctx);
       [cols.main.scrollTop, cols.cal.scrollTop, cols.trends.scrollTop] = tops;
