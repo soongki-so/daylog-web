@@ -5,6 +5,7 @@ import { h, openSheet, toast, field, input } from './ui.js';
 import { getDay, updateDay, uid, getDaysInRange, getMasters } from './store.js';
 import { fmtKey, addDays, nowHM } from './date.js';
 import { activeClasses, classById, classIdOf } from './classes.js';
+import { completeness, completenessText } from './complete.js';
 
 export const EVENT_KINDS = [
   { key: 'party', label: '회식', icon: '🍻', food: true },
@@ -37,12 +38,26 @@ export function shortLabel(ev) {
 }
 
 // 수업 일정을 '참석'으로 바꾸면 그날 운동 기록에 그 수업이 없을 때 넣어 준다 (회차 자동 증가)
-async function ensureClassExercise(day, ev, cls) {
+export async function ensureClassExercise(day, ev, cls, minutes = 50) {
   await updateDay(day, (d) => {
     if (d.exercise.some((x) => classIdOf(x) === cls.id)) return;
-    d.exercise.push({ id: uid(), at: ev.at ?? nowHM(), type: cls.name, kind: 'class', classId: cls.id, minutes: 50, kcal: null, note: ev.note || null, source: 'event' });
+    d.exercise.push({ id: uid(), at: ev.at ?? nowHM(), type: cls.name, kind: 'class', classId: cls.id, minutes, kcal: null, note: ev.note || null, source: 'event' });
   });
 }
+
+// 일정 상태 바꾸기 (예정 → 완료/취소). 오늘 화면의 운동 칸에서도 쓴다
+export const setEventStatus = (day, evId, status) =>
+  updateDay(day, (d) => { const e = eventsOf(d).find((x) => x.id === evId); if (e) e.status = status; });
+
+// 그날 아직 '예정'인 수업 일정 (운동 칸에 참석 체크로 보여 주기 위함)
+export function plannedClassEvents(doc, m) {
+  return eventsOf(doc).filter((e) => e.status === 'planned' && eventClassId(e))
+    .map((e) => ({ ev: e, cls: classById(m, eventClassId(e)) })).filter((x) => x.cls && x.cls.active !== false);
+}
+
+// 운동 기록에 수업을 적으면, 같은 수업의 '예정' 일정은 자동으로 '완료'로 (일정과 기록이 따로 놀지 않게)
+export const markClassEventDone = (day, classId) =>
+  updateDay(day, (d) => { for (const e of eventsOf(d)) if (e.status === 'planned' && eventClassId(e) === classId) e.status = 'done'; });
 
 // ---- 날짜 일정 시트 (달력에서 날짜를 누르면) ----
 export function daySheet(ctx, day, onDone) {
@@ -67,9 +82,13 @@ export function daySheet(ctx, day, onDone) {
       const chosen = choices.find((c) => c.key === pick) ?? choices[0];
       const evs = eventsOf(doc).slice().sort((a, b) => (a.at ?? '99') < (b.at ?? '99') ? -1 : 1);
       const refresh = async () => { await sh.refresh(); onDone?.(); };
+      const comp = completeness(doc, m);
       return h('div', null,
         h('div', { class: 'row', style: 'margin-bottom:12px' },
           h('button', { class: 'btn secondary grow', onclick: () => { sh.close(); ctx.setDay(day); ctx.goTab('today'); } }, '이날 기록 열기 ›')),
+        comp.filled ? h('div', { class: 'comp-line' },
+          comp.items.map((x) => h('span', { class: 'comp-item' + (x.ok ? ' ok' : ''), title: x.label }, x.icon)),
+          h('span', { class: 'muted small', style: 'margin-left:6px' }, completenessText(comp))) : null,
         evs.length ? h('div', { style: 'margin-bottom:12px' }, evs.map((ev) => {
           const k = kindOf(ev.kind, m, ev);
           const isClass = !!k.cls;
@@ -126,7 +145,9 @@ export async function guidanceFor(today) {
   const when = (e) => (e.at ? e.at + ' ' : '');
   for (const e of evs(today)) {
     const k = kindOf(e.kind, m, e);
-    if (k.cls) lines.push({ icon: k.icon, text: `오늘 ${when(e)}${k.cls.name} 수업이 있어요. 1~2시간 전에 가볍게 먹고, 물을 챙기세요.` });
+    if (k.cls) lines.push({ icon: k.icon, text: e.status === 'done'
+      ? `오늘 ${k.cls.name} 수업 다녀왔어요 👍 단백질 챙겨 먹고 푹 쉬어요.`
+      : `오늘 ${when(e)}${k.cls.name} 수업이 있어요. 1~2시간 전에 가볍게 먹고, 물을 챙기세요. 다녀오면 운동 칸에서 '참석'만 누르면 돼요.` });
     else if (k.food) {
       const upcoming = !e.at || e.at > now;
       lines.push({ icon: k.icon, text: upcoming

@@ -4,11 +4,18 @@ import { getDay, updateDay, getMasters, getDaysInRange, uid } from '../store.js'
 import { fmtKey, addDays, todayKey, nowHM, minutesToText, sleepMinutes } from '../date.js';
 import { MEAL_TYPES, SATIETY, RATINGS, EXERCISE_TYPES } from '../defaults.js';
 import { slotGroups, setsForSlot, pieFor, setRow, medsSheet } from '../meds.js';
-import { searchFoods, loadOfficialFoods } from '../foods.js';
+import { searchFoods, loadOfficialFoods, foodIcon } from '../foods.js';
 import { getAllDays } from '../store.js';
 import { syncEnabled, getSession, getStatus, syncNow } from '../sync.js';
-import { guidanceFor, daySheet } from '../events.js';
+import { guidanceFor, daySheet, plannedClassEvents, ensureClassExercise, setEventStatus, markClassEventDone } from '../events.js';
 import { activeClasses, classById, classIdOf, classProgress, progressText } from '../classes.js';
+
+// 수량 표시: 1 → "1", 0.5 → "0.5", 1.333 → "1.33"
+const fmtQty = (q) => (Number.isInteger(q) ? String(q) : String(Math.round(q * 100) / 100));
+// 식사 항목 이름 + 수량 ("삶은계란 ×3")
+const mealLabel = (x) => `${x.name}${x.qty && x.qty !== 1 ? ` ×${fmtQty(x.qty)}` : ''}`;
+// 1개(1인분) 기준 칼로리 (수량 기능 전 기록은 전체 kcal을 그대로)
+const unitKcalOf = (x) => x.unitKcal ?? (x.qty && x.qty !== 1 && x.kcal ? Math.round(x.kcal / x.qty) : x.kcal);
 
 // 오늘 화면 머리의 로그인·동기화 상태 (누르면 바로 동기화, 로그인 전이면 설정으로)
 export function syncBadge(ctx) {
@@ -35,7 +42,7 @@ export async function renderToday(root, ctx) {
   const prevWeight = await findPrevWeight(ctx.day);
   const ptInfo = await classBadges(doc, m, ctx.day);
   const guide = await guidanceFor(ctx.day);
-  root.replaceChildren(
+  root.replaceChildren(...[
     header(ctx, m),
     guide.length ? h('div', { class: 'card guide', onclick: () => daySheet(ctx, ctx.day) },
       guide.map((g) => h('div', { class: 'guide-line' }, h('span', { class: 'guide-icon' }, g.icon), h('span', null, g.text)))) : null,
@@ -44,7 +51,7 @@ export async function renderToday(root, ctx) {
     medsSection(doc, m, ctx),
     tagsSection(doc, m, ctx),
     ratingSection(doc, ctx),
-  );
+  ].filter(Boolean)); // 안내가 없을 때 'null' 글자가 찍히던 문제 방지
 }
 
 async function findPrevWeight(day) {
@@ -116,10 +123,17 @@ function dashboard(doc, m, ctx, prevWeight, ptInfo) {
     h('div', { class: 'quick', onclick: (ev) => ev.stopPropagation() },
       s.waterQuick.map((ml) => h('button', { onclick: () => addWater(ctx.day, ml) }, `+${ml}`))));
 
+  // 미리 넣어 둔 수업 일정이 있으면 운동 칸에서 바로 참석/불참 체크 (새로 입력할 필요 없음)
+  const planned = plannedClassEvents(doc, m);
   const exCell = h('div', { class: 'stat', onclick: () => exerciseSheet(doc, m, ctx) },
     h('div', { class: 'k' }, '🏃 운동', ptInfo?.length ? h('span', { class: 'pt-badge', style: 'margin-left:auto' }, ptInfo.map((b) => `${b.cls.name} ${progressText(b.p)}`).join(' · ')) : null),
     h('div', { class: 'v' }, exMin ? [minutesToText(exMin)] : h('span', { class: 'muted' }, '입력')),
-    h('div', { class: 'd' }, [exKcal ? `${fmtKcal(exKcal)} kcal · ${doc.exercise.map((x) => x.type).join(', ')}` : (exMin ? doc.exercise.map((x) => x.type).join(', ') : ''), doc.steps ? `걸음 ${Math.round(doc.steps).toLocaleString('ko-KR')}` : ''].filter(Boolean).join(' · ')));
+    h('div', { class: 'd' }, [exKcal ? `${fmtKcal(exKcal)} kcal · ${doc.exercise.map((x) => x.type).join(', ')}` : (exMin ? doc.exercise.map((x) => x.type).join(', ') : ''), doc.steps ? `걸음 ${Math.round(doc.steps).toLocaleString('ko-KR')}` : ''].filter(Boolean).join(' · ')),
+    planned.length ? h('div', { class: 'ev-check', onclick: (ev) => ev.stopPropagation() },
+      planned.map(({ ev, cls }) => h('div', { class: 'row', style: 'gap:4px' },
+        h('span', { class: 'grow small', style: 'white-space:nowrap;overflow:hidden;text-overflow:ellipsis' }, `${cls.icon} ${cls.name}${ev.at ? ' ' + ev.at : ''} 예정`),
+        h('button', { class: 'ev-btn ok', onclick: () => attendClass(ctx.day, ev, cls) }, '참석 ✓'),
+        h('button', { class: 'ev-btn', onclick: async () => { await setEventStatus(ctx.day, ev.id, 'skipped'); toast(`${cls.name} 불참으로 표시했어요`); } }, '불참')))) : null);
 
   return h('div', { class: 'card' },
     h('div', { class: 'dash' }, ringCell, weightCell, sleepCell, h('div', { class: 'dash-bottom' }, waterCell, exCell)));
@@ -128,6 +142,14 @@ function dashboard(doc, m, ctx, prevWeight, ptInfo) {
 async function addWater(day, ml) {
   await updateDay(day, (d) => d.water.push({ id: uid(), at: nowHM(), ml, source: 'manual' }));
   toast(`물 ${ml}ml 기록`);
+}
+
+// 일정의 수업을 '참석'으로: 일정은 완료, 운동 기록에 그 수업이 들어가고 회차가 올라간다
+async function attendClass(day, ev, cls) {
+  await setEventStatus(day, ev.id, 'done');
+  await ensureClassExercise(day, ev, cls);
+  const p = await classProgress(day, cls);
+  toast(`${cls.icon} ${cls.name} ${progressText(p)} 참석 기록 (50분, 운동 칸에서 수정 가능)`);
 }
 
 // 사진을 작게 줄여 JPEG dataURL로 (백업 JSON에 그대로 포함되도록)
@@ -274,8 +296,9 @@ export async function classBadges(doc, m, day) {
 }
 
 function exerciseSheet(doc, m, ctx) {
-  let pick = 'personal'; // 'personal' 또는 수업 id
   const classes = activeClasses(m);
+  // 오늘 예정된 수업 일정이 있으면 그 수업을 미리 골라 둔다 (일정 → 기록 연결)
+  let pick = plannedClassEvents(doc, m)[0]?.cls.id ?? 'personal'; // 'personal' 또는 수업 id
   const type = select(EXERCISE_TYPES, '걷기');
   const minutes = input({ type: 'number', inputmode: 'numeric', placeholder: '분' });
   const kcal = input({ type: 'number', inputmode: 'numeric', placeholder: '선택' });
@@ -289,6 +312,8 @@ function exerciseSheet(doc, m, ctx) {
       const seq = Object.fromEntries(classes.map((c) => [c.id, prog[c.id].before])); // 목록 회차 번호
       const p = cls ? prog[cls.id] : null;
       const nextLabel = cls ? `${cls.icon} ${cls.name} ${p.upTo + 1}${p.total ? '/' + p.total : ''}회차 기록` : '추가';
+      const plannedEv = cls ? plannedClassEvents(doc, m).find((x) => x.cls.id === cls.id)?.ev ?? null : null;
+      minutes.placeholder = cls ? '분 (비우면 50분)' : '분';
       const body = h('div', null,
         h('div', { class: 'field' }, h('label', null, '구분'),
           h('div', { class: 'chips' },
@@ -297,17 +322,21 @@ function exerciseSheet(doc, m, ctx) {
             h('button', { class: 'chip', style: 'opacity:.7', onclick: () => { sh.close(); ctx.goTab('settings'); } }, '＋ 수업 등록'))),
         cls && h('div', { class: 'muted small', style: 'margin:-6px 0 12px' },
           p.total ? `이번이 ${p.upTo + 1}회차예요 (등록 ${p.total}회, 이번 포함 남은 수업 ${Math.max(0, p.total - p.upTo)}회)` : `이번이 ${p.upTo + 1}회차예요`),
+        plannedEv && h('div', { class: 'row', style: 'margin:-4px 0 12px;padding:8px 10px;border-radius:12px;background:var(--lav-soft);font-size:13px' },
+          h('span', { class: 'grow' }, `📅 오늘 ${plannedEv.at ? plannedEv.at + ' ' : ''}${cls.name} 일정이 있어요. 기록하면 일정도 '완료'가 돼요.`),
+          h('button', { class: 'ev-btn', onclick: async () => { await setEventStatus(ctx.day, plannedEv.id, 'skipped'); doc = await getDay(ctx.day); toast(`${cls.name} 불참으로 표시했어요`); sh.refresh(); } }, '불참')),
         !cls && field('종류', type),
         h('div', { class: 'grid2' }, field('시간 (분)', minutes), field('소모 칼로리', kcal)),
         field('메모', note),
         h('button', { class: 'btn block', style: 'margin-bottom:12px', onclick: async () => {
-          const mnt = numOr(minutes.value); if (!mnt) return toast('시간을 입력하세요');
+          const mnt = numOr(minutes.value) ?? (cls ? 50 : null); if (!mnt) return toast('시간을 입력하세요');
           const rec = cls
-            ? { id: uid(), at: nowHM(), type: cls.name, kind: 'class', classId: cls.id, minutes: mnt, kcal: numOr(kcal.value), note: note.value.trim() || null, source: 'manual' }
+            ? { id: uid(), at: plannedEv?.at ?? nowHM(), type: cls.name, kind: 'class', classId: cls.id, minutes: mnt, kcal: numOr(kcal.value), note: note.value.trim() || null, source: 'manual' }
             : { id: uid(), at: nowHM(), type: type.value, kind: 'personal', minutes: mnt, kcal: numOr(kcal.value), note: note.value.trim() || null, source: 'manual' };
           await updateDay(ctx.day, (d) => d.exercise.push(rec));
+          if (cls) await markClassEventDone(ctx.day, cls.id); // 같은 수업의 '예정' 일정은 완료로
           doc = await getDay(ctx.day); minutes.value = ''; kcal.value = ''; note.value = ''; sh.refresh();
-          toast(cls ? `${cls.name} ${p.upTo + 1}회차 기록` : '운동 기록');
+          toast(cls ? `${cls.name} ${p.upTo + 1}회차 기록${plannedEv ? ' · 일정 완료' : ''}` : '운동 기록');
         } }, nextLabel),
         doc.exercise.length ? doc.exercise.map((x) => {
           const xc = classes.find((c) => c.id === classIdOf(x)) ?? (classIdOf(x) ? classById(m, classIdOf(x)) : null);
@@ -364,7 +393,7 @@ function mealsSection(doc, m, ctx) {
         return h('div', { class: 'meal-slot' + (entries.length ? ' filled' : ''), onclick: () => mealSheet(doc, m, ctx, t) },
           h('div', { class: 't' }, `${t.icon} ${t.label}`),
           entries.length
-            ? [h('div', { class: 'n' }, entries.map((x, i) => [i ? ', ' : '', x.name, faceOf(x) ? h('span', { class: 'sat-face' }, ' ' + faceOf(x)) : null])),
+            ? [h('div', { class: 'n' }, entries.map((x, i) => [i ? ', ' : '', foodIcon(x.name) + ' ', mealLabel(x), faceOf(x) ? h('span', { class: 'sat-face' }, ' ' + faceOf(x)) : null])),
                h('div', { class: 'k' }, kcal ? `${fmtKcal(kcal)} kcal` : ''),
                entries.some((x) => x.photo) && h('div', { class: 'thumbs' }, entries.filter((x) => x.photo).slice(0, 3).map((x) => h('img', { src: x.photo, class: 'thumb' })))]
             : h('div', { class: 'add' }, '+'),
@@ -379,7 +408,8 @@ async function foodHistory() {
   if (historyCache) return historyCache;
   const days = (await getAllDays()).sort((a, b) => (a.day < b.day ? 1 : -1));
   const seen = new Map();
-  for (const d of days) for (const x of d.meals) if (x.kcal && !seen.has(x.name)) seen.set(x.name, { name: x.name, kcal: x.kcal });
+  // 1개(1인분) 기준 칼로리로 저장해 두면, 다음에 골랐을 때 수량만 바꾸면 된다
+  for (const d of days) for (const x of d.meals) if (x.kcal && !seen.has(x.name)) seen.set(x.name, { name: x.name, kcal: unitKcalOf(x), serving: x.serving ?? null });
   historyCache = [...seen.values()];
   setTimeout(() => { historyCache = null; }, 60_000);
   return historyCache;
@@ -392,15 +422,34 @@ function mealSheet(doc, m, ctx, type) {
   const suggest = h('div', { class: 'suggest', hidden: true });
   let history = [];
   let picked = null; // 후보에서 고른 음식 (탄단지 저장용)
+
+  // ---- 수량: 1개(1인분) 칼로리 × 수량 = 기록 칼로리. kcal 칸에는 항상 합계가 보인다 ----
+  let qty = 1, unitKcal = null, serving = null;
+  const qtyIn = input({ type: 'number', step: '0.5', min: '0.1', inputmode: 'decimal', value: 1, class: 'input qty-in', 'aria-label': '수량' });
+  const qtyHint = h('span', { class: 'muted small grow' });
+  const updateHint = () => {
+    if (unitKcal == null) { qtyHint.textContent = '칼로리를 넣으면 수량에 따라 계산돼요'; return; }
+    const unit = serving ? (serving.endsWith('당') ? serving : serving + '당') : '1개(1인분)당';
+    qtyHint.textContent = `${unit} ${Math.round(unitKcal)}kcal${qty !== 1 ? ` × ${fmtQty(qty)} = ${Math.round(unitKcal * qty)}kcal` : ''}`;
+  };
+  const applyQty = () => { if (unitKcal != null) kcal.value = Math.round(unitKcal * qty); qtyIn.value = fmtQty(qty); updateHint(); };
+  // 후보·프리셋에서 고르면 그 값이 1개 기준이 되고 수량은 1로
+  const setUnit = (k, s) => { unitKcal = k ?? null; serving = s ?? null; qty = 1; applyQty(); };
+  qtyIn.addEventListener('input', () => { const v = numOr(qtyIn.value); if (v != null && v > 0) { qty = v; if (unitKcal != null) kcal.value = Math.round(unitKcal * qty); updateHint(); } });
+  // 칼로리를 직접 고치면 그 값을 현재 수량 기준으로 다시 1개 칼로리를 잡는다
+  kcal.addEventListener('input', () => { const v = numOr(kcal.value); unitKcal = v != null && qty > 0 ? v / qty : null; updateHint(); });
+  updateHint();
+
   foodHistory().then((hh) => { history = hh; });
   loadOfficialFoods().then(() => { if (document.activeElement === name && name.value.trim()) showSuggest(); });
   let sTimer;
   const showSuggest = () => {
     const list = searchFoods(name.value, history);
     suggest.replaceChildren(...list.map((f) => h('button', { class: 'suggest-item', onpointerdown: (e) => e.preventDefault(), onclick: () => {
-      name.value = f.name; kcal.value = f.kcal; picked = f; suggest.replaceChildren(); suggest.hidden = true; kcal.focus();
+      name.value = f.name; setUnit(f.kcal, f.serving === '내 기록' ? null : f.serving); picked = f; suggest.replaceChildren(); suggest.hidden = true;
+      qtyIn.focus(); qtyIn.select();
     } },
-      h('span', { class: 'grow' }, f.mine ? '★ ' : '', f.name,
+      h('span', { class: 'grow' }, f.mine ? '★ ' : '', h('span', { class: 'food-ic' }, foodIcon(f.name)), f.name,
         f.src === 'official' ? h('span', { class: 'src-tag' }, '식약처') : null),
       h('span', { class: 'muted small' }, f.serving ?? ''),
       h('b', null, `${f.kcal}`))));
@@ -415,7 +464,7 @@ function mealSheet(doc, m, ctx, type) {
     // 이름만 치고 넘어가면 정확히 같은 이름의 칼로리를 채워 줌
     if (!kcal.value && name.value.trim()) {
       const exact = searchFoods(name.value, history, 1)[0];
-      if (exact && exact.name.replace(/\s+/g, '') === name.value.trim().replace(/\s+/g, '')) kcal.value = exact.kcal;
+      if (exact && exact.name.replace(/\s+/g, '') === name.value.trim().replace(/\s+/g, '')) setUnit(exact.kcal, exact.serving === '내 기록' ? null : exact.serving);
     }
     suggest.replaceChildren(); suggest.hidden = true;
   }, 150));
@@ -425,8 +474,11 @@ function mealSheet(doc, m, ctx, type) {
 
   const presets = [...m.presets].sort((a, b) => (b.favorite - a.favorite) || (a.order - b.order));
 
-  const resetForm = () => { editing = null; name.value = ''; kcal.value = ''; note.value = ''; satiety = null; presetId = null; photo = null; };
-  const loadForm = (x) => { editing = x; name.value = x.name; kcal.value = x.kcal ?? ''; note.value = x.note ?? ''; satiety = x.satiety ?? null; presetId = x.presetId ?? null; photo = x.photo ?? null; };
+  const resetForm = () => { editing = null; name.value = ''; kcal.value = ''; note.value = ''; satiety = null; presetId = null; photo = null; picked = null; qty = 1; unitKcal = null; serving = null; qtyIn.value = 1; updateHint(); };
+  const loadForm = (x) => {
+    editing = x; name.value = x.name; kcal.value = x.kcal ?? ''; note.value = x.note ?? ''; satiety = x.satiety ?? null; presetId = x.presetId ?? null; photo = x.photo ?? null; picked = null;
+    qty = x.qty && x.qty > 0 ? x.qty : 1; unitKcal = x.unitKcal ?? (x.kcal != null ? x.kcal / qty : null); serving = x.serving ?? null; qtyIn.value = fmtQty(qty); updateHint();
+  };
 
   openSheet({
     title: `${type.icon} ${type.label}`,
@@ -443,8 +495,8 @@ function mealSheet(doc, m, ctx, type) {
         entries.length ? h('div', { style: 'margin-bottom:12px' }, entries.map((x) => h('div', { class: 'list-item' },
           x.photo && h('img', { src: x.photo, class: 'thumb lg', onclick: () => photoViewer(x.photo, x.name) }),
           h('div', { class: 'grow', onclick: () => { loadForm(x); sh.refresh(); } },
-            h('div', null, x.name, ' ', x.satiety ? SATIETY.find((s) => s.v === x.satiety)?.face : ''),
-            h('div', { class: 'muted small' }, [x.kcal ? `${x.kcal} kcal` : null, x.at, x.note].filter(Boolean).join(' · '))),
+            h('div', null, h('span', { class: 'food-ic' }, foodIcon(x.name)), ' ', mealLabel(x), ' ', x.satiety ? SATIETY.find((s) => s.v === x.satiety)?.face : ''),
+            h('div', { class: 'muted small' }, [x.kcal ? `${x.kcal} kcal${x.qty && x.qty !== 1 && x.unitKcal ? ` (${Math.round(x.unitKcal)}×${fmtQty(x.qty)})` : ''}` : null, x.at, x.note].filter(Boolean).join(' · '))),
           h('button', { class: 'icon-btn plain', onclick: async () => {
             await updateDay(ctx.day, (d) => { d.meals = d.meals.filter((y) => y.id !== x.id); });
             doc = await getDay(ctx.day); if (editing?.id === x.id) resetForm(); sh.refresh();
@@ -453,11 +505,17 @@ function mealSheet(doc, m, ctx, type) {
         h('div', { class: 'muted small', style: 'margin-bottom:6px' }, editing ? '수정 중' : '프리셋에서 고르거나 직접 입력'),
         h('div', { class: 'chips', style: 'margin-bottom:12px' },
           presets.map((p) => h('button', { class: 'chip' + (presetId === p.id ? ' on' : ''), onclick: () => {
-            presetId = p.id; name.value = p.name; kcal.value = p.kcal ?? ''; sh.refresh();
+            presetId = p.id; name.value = p.name; setUnit(p.kcal ?? null, '1인분'); if (p.kcal == null) kcal.value = ''; sh.refresh();
           } }, p.favorite ? '★ ' : '', p.name, p.kcal ? h('span', { class: 'muted' }, ` ${p.kcal}`) : null))),
         h('div', { class: 'row', style: 'margin-bottom:4px' }, name, h('div', { style: 'width:100px' }, kcal)),
         suggest,
-        h('div', { class: 'muted small', style: 'margin-bottom:10px' }, '이름을 치면 칼로리 후보가 떠요. ★는 내가 전에 기록한 것'),
+        h('div', { class: 'qty-row' },
+          h('span', { class: 'muted small' }, '수량'),
+          h('button', { class: 'qty-btn', 'aria-label': '수량 줄이기', onclick: () => { qty = Math.max(0.5, Math.round((qty - 0.5) * 100) / 100); applyQty(); } }, '−'),
+          qtyIn,
+          h('button', { class: 'qty-btn', 'aria-label': '수량 늘리기', onclick: () => { qty = Math.round((qty + 0.5) * 100) / 100; applyQty(); } }, '+'),
+          qtyHint),
+        h('div', { class: 'muted small', style: 'margin-bottom:10px' }, '이름을 치면 칼로리 후보가 떠요. ★는 내가 전에 기록한 것. 계란 반 개는 0.5, 세 개는 3'),
         h('div', { class: 'field' }, h('label', null, '포만감'), satRow),
         field('메모', note),
         h('div', { class: 'row', style: 'margin-bottom:12px' },
@@ -472,8 +530,12 @@ function mealSheet(doc, m, ctx, type) {
           h('button', { class: 'btn grow', id: 'meal-save-btn', onclick: async () => {
             if (!name.value.trim()) { sh.close(); return; }
             const fromPick = picked && picked.name === name.value.trim() && picked.src === 'official';
-            const rec = { id: editing?.id ?? uid(), at: editing?.at ?? nowHM(), type: type.key, presetId, name: name.value.trim(), kcal: numOr(kcal.value), satiety, note: note.value.trim() || null, photo, source: 'manual',
-              ...(fromPick ? { carb: picked.carb ?? null, protein: picked.protein ?? null, fat: picked.fat ?? null, serving: picked.serving ?? null, foodSrc: 'mfds' } : {}) };
+            const sc = (v) => (v == null ? null : Math.round(v * qty * 10) / 10); // 탄단지도 수량만큼
+            const rec = { id: editing?.id ?? uid(), at: editing?.at ?? nowHM(), type: type.key, presetId, name: name.value.trim(), kcal: numOr(kcal.value),
+              qty, unitKcal: unitKcal != null ? Math.round(unitKcal * 10) / 10 : null, serving,
+              satiety, note: note.value.trim() || null, photo, source: 'manual',
+              ...(fromPick ? { carb: sc(picked.carb), protein: sc(picked.protein), fat: sc(picked.fat), foodSrc: 'mfds' }
+                : editing?.foodSrc ? { carb: editing.carb ?? null, protein: editing.protein ?? null, fat: editing.fat ?? null, foodSrc: editing.foodSrc } : {}) };
             picked = null;
             await updateDay(ctx.day, (d) => { const i = d.meals.findIndex((y) => y.id === rec.id); if (i >= 0) d.meals[i] = rec; else d.meals.push(rec); });
             doc = await getDay(ctx.day); historyCache = null; foodHistory().then((hh) => { history = hh; }); resetForm(); sh.refresh(); toast('저장했어요');

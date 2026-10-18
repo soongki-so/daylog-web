@@ -123,6 +123,15 @@ hr.sep { border: 0; border-top: 1px solid var(--line); margin: 12px 0; }
 .suggest-item:active { background: var(--sun-soft); }
 .suggest-item b { min-width: 40px; text-align: right; }
 .src-tag { display: inline-block; margin-left: 6px; font-size: 10px; font-weight: 700; color: #2F6FA8; background: var(--sky-soft); border-radius: 6px; padding: 1px 5px; vertical-align: 1px; }
+.food-ic { font-size: 15px; margin-right: 2px; }
+/* 식사 시트: 수량 (−/+ 0.5씩, 직접 입력도 가능) */
+.qty-row { display: flex; align-items: center; gap: 6px; margin: 6px 0 4px; }
+.qty-btn { width: 34px; height: 34px; border-radius: 10px; background: #F4F0EA; font-size: 18px; font-weight: 700; flex: none; }
+.input.qty-in { width: 64px; text-align: center; padding: 7px 4px; flex: none; }
+/* 운동 칸: 미리 넣어 둔 수업 일정의 참석/불참 체크 */
+.ev-check { margin-top: 6px; padding-top: 6px; border-top: 1px dashed rgba(60,40,20,0.12); display: flex; flex-direction: column; gap: 4px; }
+.ev-btn { padding: 4px 8px; border-radius: 8px; background: #EEEAE4; font-size: 11px; font-weight: 700; color: #5C554D; flex: none; }
+.ev-btn.ok { background: var(--mint-soft); color: #24784F; }
 
 /* ---------- 오늘: 약 / 투약 / 태그 / 평가 ---------- */
 .med-group { margin-bottom: 6px; }
@@ -217,6 +226,16 @@ hr.sep { border: 0; border-top: 1px solid var(--line); margin: 12px 0; }
 .cal-cell.inj-next { border-style: dashed; border-color: var(--lav); }
 .cal-cell.r1 { background: #FBE3E3; } .cal-cell.r2 { background: #FDEFD9; } .cal-cell.r3 { background: #F4F0EA; } .cal-cell.r4 { background: #E3F5EE; } .cal-cell.r5 { background: #DDF2E6; }
 .cal-legend { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 10px; font-size: 11px; color: var(--muted); }
+/* 달력: 날짜 숫자 둘레의 기록 완성도 고리 (채운 항목만큼 호가 길어지고, 다 채우면 초록 한 바퀴) */
+.cal-cell .dn { position: relative; display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; flex: none; }
+.cal-cell .dn svg { position: absolute; inset: 0; width: 100%; height: 100%; transform: rotate(-90deg); }
+.cal-cell .dn .n { position: relative; }
+.cal-cell .dn.full .n { color: #24784F; font-weight: 800; }
+.legend-ring { display: inline-block; width: 10px; height: 10px; border-radius: 50%; border: 2px solid var(--mint); vertical-align: -1px; }
+/* 일정 시트 머리: 그날 채운 항목 아이콘 (안 채운 건 흐리게) */
+.comp-line { display: flex; align-items: center; gap: 2px; margin: -4px 0 12px; flex-wrap: wrap; }
+.comp-item { font-size: 13px; opacity: 0.25; filter: grayscale(1); }
+.comp-item.ok { opacity: 1; filter: none; }
 
 /* ---------- 변화 ---------- */
 .periods { display: flex; gap: 6px; margin: 4px 0 12px; }
