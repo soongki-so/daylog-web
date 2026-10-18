@@ -1,6 +1,6 @@
 // 달력: 월간 격자에 하루평가 색·얼굴, 특이사항 아이콘, 투약 기록/예정 표시, 날짜 둘레에 기록 완성도 고리
 import { h, svg } from '../ui.js';
-import { completeness, completenessText } from '../complete.js';
+import { completeness, completenessText, goalProgress, goalText } from '../complete.js';
 import { getDaysInRange, getMasters } from '../store.js';
 import { monthGrid, monthRange, todayKey, DOW, parseKey, fmtKey, diffDays } from '../date.js';
 import { RATINGS } from '../defaults.js';
@@ -37,12 +37,13 @@ export async function renderCalendar(root, ctx) {
       ...(d ? [...new Set(d.exercise.map((x) => classIdOf(x)).filter(Boolean))].slice(0, 2).map((id) => classById(m, id)?.icon ?? '🏋️') : []),
     ].join('');
     const evs = eventsOf(d).slice().sort((a, b) => (a.at ?? '99') < (b.at ?? '99') ? -1 : 1);
-    // 기록 완성도: 지난 날·오늘만, 하나라도 기록했으면 날짜 숫자 둘레에 고리 (다 채우면 초록 한 바퀴)
+    // 날짜 둘레 고리 2개 (지난 날·오늘, 하나라도 기록한 날만): 바깥 초록 = 기록 여부, 안쪽 파랑 = 목표 달성
     const comp = d && c.key <= today ? completeness(d, m) : null;
     const showRing = !!comp?.filled;
+    const goal = showRing ? goalProgress(d, m) : null;
     const cls = ['cal-cell', !c.inMonth && 'out', c.key === today && 'today', rating && `r${rating}`, d?.injection && 'inj', isNext && 'inj-next', evs.length && 'has-ev', showRing && comp.full && 'full'].filter(Boolean).join(' ');
-    return h('div', { class: cls, title: showRing ? completenessText(comp) : null, onclick: () => daySheet(ctx, c.key, refresh) },
-      h('div', { class: 'row', style: 'gap:3px;width:100%;justify-content:center' }, dayNum(c.day, showRing ? comp : null), face ? h('span', { class: 'f' }, face) : null),
+    return h('div', { class: cls, title: showRing ? `${completenessText(comp)}\n${goalText(goal)}` : null, onclick: () => daySheet(ctx, c.key, refresh) },
+      h('div', { class: 'row', style: 'gap:3px;width:100%;justify-content:center' }, dayNum(c.day, showRing ? comp : null, goal), face ? h('span', { class: 'f' }, face) : null),
       evs.slice(0, 2).map((ev) => h('div', { class: `ev ev-${ev.kind}${ev.status === 'skipped' ? ' ev-skip' : ''}`, title: shortLabel(ev) }, ev.title)),
       evs.length > 2 ? h('div', { class: 'ev ev-more' }, `+${evs.length - 2}`) : null,
       h('div', { class: 'i' }, icons, !face && d?.weight?.kg ? h('span', { class: 'small muted' }, ` ${d.weight.kg.toFixed(1)}`) : null));
@@ -68,7 +69,7 @@ export async function renderCalendar(root, ctx) {
       cells),
     h('div', { class: 'cal-legend' },
       h('span', null, '날짜를 누르면 일정 추가'), h('span', null, '💉 투약'), h('span', null, '⏰ 투약 예정'), h('span', null, '📋 인바디'), h('span', null, '🏋️ 수업'),
-      h('span', null, h('span', { class: 'legend-ring' }), ' 기록 완성도 (초록 한 바퀴 = 다 채움)')),
+      h('span', null, h('span', { class: 'legend-ring' }), ' 바깥 초록 = 기록했나'), h('span', null, h('span', { class: 'legend-ring goal' }), ' 안쪽 파랑 = 목표 달성 (한 바퀴 = 100%)')),
 
     // 다가오는 일정
     h('div', { class: 'card', style: 'margin-top:12px' },
@@ -99,6 +100,7 @@ export async function renderCalendar(root, ctx) {
       h('div', { class: 'card-title' }, h('span', null, '이번 달 요약')),
       h('div', { class: 'grid2' },
         stat('기록한 날 · 다 채운 날', `${monthStats.logged}일 · ${monthStats.full}일`),
+        stat('목표 달성 평균', monthStats.goalAvg != null ? `${monthStats.goalAvg}%` : '-'),
         stat('평균 하루평가', monthStats.avgRating ? `${monthStats.avgRating} / 5` : '-'),
         stat('체중 변화', monthStats.weightDelta != null ? `${monthStats.weightDelta > 0 ? '+' : ''}${monthStats.weightDelta.toFixed(1)} kg` : '-'),
         stat('투약 횟수', `${monthStats.injections}회`))));
@@ -114,15 +116,24 @@ function stat(k, v) {
   return h('div', { class: 'stat' }, h('div', { class: 'k' }, k), h('div', { class: 'v', style: 'font-size:15px' }, v));
 }
 
-// 날짜 숫자 + (기록이 있으면) 둘레 고리. 고리 길이 = 채운 항목 비율
-function dayNum(n, comp) {
+// 날짜 숫자 + (기록이 있으면) 둘레 고리 2개. 바깥 = 기록 여부(초록), 안쪽 = 목표 달성(파랑). 길이 = 비율
+function dayNum(n, comp, goal) {
   if (!comp) return h('span', { class: 'dn' }, h('span', { class: 'n' }, n));
-  const size = 24, stroke = 2.5, r = (size - stroke) / 2, circ = 2 * Math.PI * r;
-  return h('span', { class: 'dn' + (comp.full ? ' full' : '') },
+  const size = 28, stroke = 2.5, c = size / 2;
+  const arc = (r, ratio, color, track) => {
+    const circ = 2 * Math.PI * r;
+    return [
+      svg('circle', { cx: c, cy: c, r, fill: 'none', stroke: track, 'stroke-width': stroke }),
+      ratio > 0 ? svg('circle', { cx: c, cy: c, r, fill: 'none', stroke: color, 'stroke-width': stroke,
+        'stroke-linecap': 'round', 'stroke-dasharray': circ, 'stroke-dashoffset': circ * (1 - Math.min(1, ratio)) }) : null,
+    ];
+  };
+  const rOut = (size - stroke) / 2, rIn = rOut - stroke - 1;
+  const bothFull = comp.full && goal?.full;
+  return h('span', { class: 'dn' + (bothFull ? ' full' : '') },
     svg('svg', { viewBox: `0 0 ${size} ${size}`, 'aria-hidden': 'true' },
-      svg('circle', { cx: size / 2, cy: size / 2, r, fill: 'none', stroke: 'rgba(60,40,20,0.10)', 'stroke-width': stroke }),
-      svg('circle', { cx: size / 2, cy: size / 2, r, fill: 'none', stroke: comp.full ? 'var(--mint)' : 'var(--sun)', 'stroke-width': stroke,
-        'stroke-linecap': 'round', 'stroke-dasharray': circ, 'stroke-dashoffset': circ * (1 - comp.ratio) })),
+      arc(rOut, comp.ratio, comp.full ? '#3FA97B' : 'var(--mint)', 'rgba(63,169,123,0.14)'),
+      goal ? arc(rIn, goal.ratio, goal.full ? '#2F6FA8' : 'var(--sky)', 'rgba(47,111,168,0.12)') : null),
     h('span', { class: 'n' }, n));
 }
 
@@ -132,6 +143,8 @@ function summarize(days, m) {
   return {
     logged: days.filter((d) => d.updatedAt).length,
     full: days.filter((d) => completeness(d, m).full).length,
+    // 목표 달성 평균: 하나라도 기록한 날들의 안쪽 고리 평균
+    goalAvg: (() => { const g = days.filter((d) => completeness(d, m).filled).map((d) => goalProgress(d, m).pct); return g.length ? Math.round(g.reduce((a, x) => a + x, 0) / g.length) : null; })(),
     avgRating: rated.length ? (rated.reduce((a, d) => a + d.rating, 0) / rated.length).toFixed(1) : null,
     weightDelta: weights.length >= 2 ? weights[weights.length - 1].weight.kg - weights[0].weight.kg : null,
     injections: days.filter((d) => d.injection).length,

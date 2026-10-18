@@ -62,6 +62,10 @@ export const DEFAULT_MASTERS = {
     waterGoalMl: 2000,
     waterQuick: [200, 300, 500],
     restingEnergy: 1300,
+    kcalGoal: null,        // 목표 섭취 kcal/일. 비우면 그날 소모량(안정시+활동)을 목표로 봄 (달력 안쪽 고리)
+    exerciseGoalMin: 30,   // 하루 운동 목표(분)
+    sleepGoalHours: 7,     // 수면 목표(시간)
+    stepsGoal: 8000,       // 걸음 목표 (건강 앱에서 걸음이 들어온 날)
     injectionName: '주사',   // 주 1회 주사약 이름 (설정에서 변경, 예: 마운자로)
     injectionDefaultMg: 2.5,
     dayBoundaryHour: 0,

@@ -209,9 +209,17 @@ function goalsCard(m) {
   const injName = input({ type: 'text', value: s.injectionName });
   const injMg = input({ type: 'number', step: '0.5', inputmode: 'decimal', value: s.injectionDefaultMg });
   const boundary = select([0, 2, 3, 4, 5].map((hh) => ({ value: String(hh), label: hh === 0 ? '자정 (00:00)' : `새벽 ${hh}시` })), String(s.dayBoundaryHour));
+  // 달력 안쪽(파랑) 고리에 쓰는 하루 목표
+  const kcalGoal = input({ type: 'number', inputmode: 'numeric', value: s.kcalGoal ?? '', placeholder: '비우면 소모량 기준' });
+  const exGoal = input({ type: 'number', inputmode: 'numeric', value: s.exerciseGoalMin ?? 30 });
+  const sleepGoal = input({ type: 'number', step: '0.5', inputmode: 'decimal', value: s.sleepGoalHours ?? 7 });
+  const stepsGoal = input({ type: 'number', inputmode: 'numeric', value: s.stepsGoal ?? 8000 });
   return h('div', { class: 'card' },
     h('div', { class: 'card-title' }, h('span', null, '🎯 목표 · 기본값')),
     h('div', { class: 'grid2' }, field('물 목표 (ml)', water), field('물 빠른 버튼', quick)),
+    h('div', { class: 'grid2' }, field('목표 섭취 (kcal/일)', kcalGoal), field('운동 목표 (분/일)', exGoal)),
+    h('div', { class: 'grid2' }, field('수면 목표 (시간)', sleepGoal), field('걸음 목표', stepsGoal)),
+    h('div', { class: 'muted small', style: 'margin:-6px 0 12px' }, '달력 날짜의 안쪽 파란 고리는 이 목표를 얼마나 채웠는지예요. 섭취 목표를 비우면 "그날 소모량 이하"를 목표로 봐요. 걸음은 건강 앱에서 들어온 날 운동 대신 인정.'),
     field('안정시 에너지 (kcal/일)', resting),
     h('div', { class: 'muted small', style: 'margin:-6px 0 12px' }, '가만히 있어도 쓰는 에너지. 건강 앱 "안정시 에너지" 값을 넣으면 정확해요.'),
     h('div', { class: 'grid2' }, field('투약 약 이름', injName), field('기본 용량 (mg)', injMg)),
@@ -223,6 +231,10 @@ function goalsCard(m) {
         mm.settings.waterQuick = quick.value.split(',').map((x) => numOr(x.trim())).filter(Boolean).slice(0, 4);
         if (!mm.settings.waterQuick.length) mm.settings.waterQuick = [200, 300, 500];
         mm.settings.restingEnergy = numOr(resting.value, 1300);
+        mm.settings.kcalGoal = numOr(kcalGoal.value) || null;
+        mm.settings.exerciseGoalMin = numOr(exGoal.value, 30);
+        mm.settings.sleepGoalHours = numOr(sleepGoal.value, 7);
+        mm.settings.stepsGoal = numOr(stepsGoal.value, 8000);
         mm.settings.injectionName = injName.value.trim() || '주사';
         mm.settings.injectionDefaultMg = numOr(injMg.value, 2.5);
         mm.settings.dayBoundaryHour = numOr(boundary.value, 0);

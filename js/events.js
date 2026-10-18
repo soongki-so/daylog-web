@@ -5,7 +5,7 @@ import { h, openSheet, toast, field, input } from './ui.js';
 import { getDay, updateDay, uid, getDaysInRange, getMasters } from './store.js';
 import { fmtKey, addDays, nowHM } from './date.js';
 import { activeClasses, classById, classIdOf } from './classes.js';
-import { completeness, completenessText } from './complete.js';
+import { completeness, completenessText, goalProgress, goalText } from './complete.js';
 
 export const EVENT_KINDS = [
   { key: 'party', label: '회식', icon: '🍻', food: true },
@@ -83,12 +83,16 @@ export function daySheet(ctx, day, onDone) {
       const evs = eventsOf(doc).slice().sort((a, b) => (a.at ?? '99') < (b.at ?? '99') ? -1 : 1);
       const refresh = async () => { await sh.refresh(); onDone?.(); };
       const comp = completeness(doc, m);
+      const goal = comp.filled ? goalProgress(doc, m) : null;
       return h('div', null,
         h('div', { class: 'row', style: 'margin-bottom:12px' },
           h('button', { class: 'btn secondary grow', onclick: () => { sh.close(); ctx.setDay(day); ctx.goTab('today'); } }, '이날 기록 열기 ›')),
-        comp.filled ? h('div', { class: 'comp-line' },
-          comp.items.map((x) => h('span', { class: 'comp-item' + (x.ok ? ' ok' : ''), title: x.label }, x.icon)),
-          h('span', { class: 'muted small', style: 'margin-left:6px' }, completenessText(comp))) : null,
+        comp.filled ? h('div', { class: 'comp-block' },
+          h('div', { class: 'comp-line' }, h('span', { class: 'legend-ring' }),
+            comp.items.map((x) => h('span', { class: 'comp-item' + (x.ok ? ' ok' : ''), title: x.label }, x.icon)),
+            h('span', { class: 'muted small', style: 'margin-left:4px' }, completenessText(comp))),
+          h('div', { class: 'comp-line' }, h('span', { class: 'legend-ring goal' }),
+            h('span', { class: 'muted small' }, goalText(goal)))) : null,
         evs.length ? h('div', { style: 'margin-bottom:12px' }, evs.map((ev) => {
           const k = kindOf(ev.kind, m, ev);
           const isClass = !!k.cls;
