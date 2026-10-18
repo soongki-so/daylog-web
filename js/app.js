@@ -107,7 +107,24 @@ async function importFromHash() {
   await ctx.goToday();
   state._lastToday = state.day;
   render();
-  if ('serviceWorker' in navigator && location.protocol !== 'file:') {
-    navigator.serviceWorker.register('./sw.js').catch(() => {});
-  }
+  if ('serviceWorker' in navigator && location.protocol !== 'file:') registerSW();
 })();
+
+// 새 버전 자동 반영: 홈 화면 앱은 다시 열어도 옛 화면을 그대로 들고 있어서,
+// (1) 앱이 앞으로 올 때마다 sw.js 가 바뀌었는지 확인하고 (2) 새 서비스워커가 자리를 잡으면 한 번 새로고침한다
+async function registerSW() {
+  try {
+    const hadController = !!navigator.serviceWorker.controller; // 처음 설치(이전 워커 없음)면 새로고침하지 않음
+    const reg = await navigator.serviceWorker.register('./sw.js');
+    let refreshing = false;
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (refreshing || !hadController) return;
+      refreshing = true;
+      location.reload();
+    });
+    const check = () => reg.update().catch(() => {});
+    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') check(); });
+    window.addEventListener('focus', check);
+    setInterval(check, 30 * 60 * 1000); // 켜 둔 채로 오래 쓸 때도 30분마다 확인
+  } catch { /* 서비스워커 없이도 앱은 동작 */ }
+}
