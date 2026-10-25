@@ -170,15 +170,9 @@ hr.sep { border: 0; border-top: 1px solid var(--line); margin: 12px 0; }
 #app.wide { max-width: 1800px; }
 #app.wide .tabs { display: none; }
 #app.wide .view {
-  display: grid; grid-template-columns: repeat(4, minmax(0, 1fr));
+  display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 0.8fr);
   gap: 14px; height: 100vh; box-sizing: border-box; padding: 14px 14px;
 }
-/* 4칸이 같은 너비라 오늘 칸이 좁음: 머리 버튼을 줄이고 날짜는 두 줄 허용, 식사 칸은 2×2 */
-#app.wide .col-main .day-header { gap: 6px; }
-#app.wide .col-main .day-nav { display: flex; gap: 4px; flex-wrap: nowrap; }
-#app.wide .col-main .day-nav .icon-btn { width: 30px; height: 30px; font-size: 14px; }
-#app.wide .col-main .day-header .sub { white-space: normal; word-break: keep-all; }
-#app.wide .col-main .meals { grid-template-columns: repeat(2, 1fr); }
 #app.wide .col { min-width: 0; overflow-y: auto; padding: 0 4px 24px; scrollbar-width: thin; }
 #app.wide .col-cal .cal-head, #app.wide .col-trends .cal-head, #app.wide .col-avatar .cal-head { position: sticky; top: 0; z-index: 2; background: var(--bg); padding: 4px 0 8px; margin-top: 0; }
 @keyframes pulse { 50% { opacity: 0.3; } }
