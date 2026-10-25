@@ -9,10 +9,26 @@ import { getAllDays } from '../store.js';
 import { syncEnabled, getSession, getStatus, syncNow } from '../sync.js';
 import { guidanceFor, daySheet, plannedClassEvents, ensureClassExercise, setEventStatus, markClassEventDone } from '../events.js';
 import { activeClasses, classById, classIdOf, classProgress, progressText } from '../classes.js';
-import { drawFace, lookOf } from '../avatar.js';
 
-// 수량 표시: 1 → "1", 0.5 → "0.5", 1.333 → "1.33"
-const fmtQty = (q) => (Number.isInteger(q) ? String(q) : String(Math.round(q * 100) / 100));
+// 수량 표시: 1 → "1", 0.5 → "½", 2/3 → "⅔", 1.5 → "1½", 1.2 → "1.2"
+const FRACS = { '1/2': '½', '1/3': '⅓', '2/3': '⅔', '1/4': '¼', '3/4': '¾' };
+const fmtQty = (q) => {
+  if (Number.isInteger(q)) return String(q);
+  const whole = Math.floor(q), rest = q - whole;
+  for (const d of [2, 3, 4]) {
+    const k = Math.round(rest * d);
+    if (k > 0 && k < d && Math.abs(rest - k / d) < 0.005) return (whole || '') + FRACS[`${k}/${d}`];
+  }
+  return String(Math.round(q * 100) / 100);
+};
+// 수량 읽기: "2/3", "1 1/2", "⅔", "1½", "0.5" 모두
+const GLYPHS = Object.fromEntries(Object.entries(FRACS).map(([k, v]) => [v, k]));
+export function parseQty(v) {
+  let t = String(v ?? '').trim().replace(/[½⅓⅔¼¾]/g, (g) => ` ${GLYPHS[g]}`).trim();
+  const m = t.match(/^(?:(\d+(?:\.\d+)?)\s+)?(\d+(?:\.\d+)?)\s*\/\s*(\d+(?:\.\d+)?)$/);
+  const n = m ? (m[1] ? +m[1] : 0) + (+m[3] ? +m[2] / +m[3] : NaN) : parseFloat(t);
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
 // 식사 항목 이름 + 수량 ("삶은계란 ×3")
 const mealLabel = (x) => `${x.name}${x.qty && x.qty !== 1 ? ` ×${fmtQty(x.qty)}` : ''}`;
 // 1개(1인분) 기준 칼로리 (수량 기능 전 기록은 전체 kcal을 그대로)
@@ -73,17 +89,9 @@ function header(ctx, m) {
       h('button', { class: 'icon-btn', onclick: () => { ctx.setDay(addDays(ctx.day, -1)); ctx.goTab('today'); }, 'aria-label': '이전 날' }, '‹'),
       !isToday && h('button', { class: 'btn sm secondary', onclick: () => { ctx.setDay(today); ctx.goTab('today'); } }, '오늘'),
       h('button', { class: 'icon-btn', onclick: () => { ctx.setDay(addDays(ctx.day, 1)); ctx.goTab('today'); }, 'aria-label': '다음 날' }, '›'),
-      avatarButton(ctx, m),
       syncBadge(ctx),
       h('button', { class: 'icon-btn', onclick: () => healthImportAction(ctx), 'aria-label': '건강 앱 데이터 가져오기', title: '건강 앱 데이터 가져오기 (클립보드)' }, '🍎'),
       h('button', { class: 'icon-btn', onclick: () => ctx.goTab('settings'), 'aria-label': '설정' }, '⚙️')));
-}
-
-// 머리의 작은 캐릭터 얼굴 (누르면 캐릭터 탭)
-function avatarButton(ctx, m) {
-  const c = h('canvas', { width: 60, height: 60 });
-  drawFace(c, { ...lookOf(m), mood: 'happy' });
-  return h('button', { class: 'icon-btn av-face', onclick: () => ctx.goTab('avatar'), 'aria-label': '내 캐릭터', title: '내 캐릭터' }, c);
 }
 
 // ---------- 통합 대시보드 ----------
@@ -378,7 +386,7 @@ function energySheet(doc, m, ctx) {
         h('div', { class: 'row' }, h('span', { class: 'grow' }, '활동 에너지'), h('b', null, `${fmtKcal(e.active)} kcal`)),
         h('hr', { class: 'sep' }),
         h('div', { class: 'row' }, h('span', { class: 'grow' }, '순 차이 (섭취 − 총 소모)'), h('b', { style: e.balance > 0 ? 'color:var(--danger)' : 'color:var(--mint)' }, `${e.balance > 0 ? '+' : ''}${fmtKcal(e.balance)} kcal`))),
-      h('div', { class: 'muted small', style: 'margin-bottom:10px' }, '총 소모 = 안정시 + 활동. 건강 앱 값을 알면 오늘만 덮어쓸 수 있어요. (나중에 단축어로 자동 입력 예정)'),
+      h('div', { class: 'muted small', style: 'margin-bottom:10px' }, '총 소모 = 안정시 + 활동. 🍎 버튼으로 건강 앱에서 가져오면 자동으로 채워져요. 여기서 고치면 오늘만 덮어써요 (다음에 가져오면 건강 앱 값으로 바뀜).'),
       h('div', { class: 'grid2' }, field('안정시 (오늘만)', resting), field('활동 (오늘만)', active)),
       h('button', { class: 'btn block', onclick: async () => {
         const r = numOr(resting.value), a = numOr(active.value);
@@ -434,7 +442,8 @@ function mealSheet(doc, m, ctx, type) {
 
   // ---- 수량: 1개(1인분) 칼로리 × 수량 = 기록 칼로리. kcal 칸에는 항상 합계가 보인다 ----
   let qty = 1, unitKcal = null, serving = null;
-  const qtyIn = input({ type: 'number', step: '0.5', min: '0.1', inputmode: 'decimal', value: 1, class: 'input qty-in', 'aria-label': '수량' });
+  // 숫자 전용 칸은 "2/3"을 못 받아서 글자 칸으로 (분수는 아래 버튼으로도)
+  const qtyIn = input({ type: 'text', inputmode: 'text', autocomplete: 'off', value: 1, class: 'input qty-in', 'aria-label': '수량 (2/3처럼 분수도 돼요)' });
   const qtyHint = h('span', { class: 'muted small grow' });
   const updateHint = () => {
     if (unitKcal == null) { qtyHint.textContent = '칼로리를 넣으면 수량에 따라 계산돼요'; return; }
@@ -444,7 +453,8 @@ function mealSheet(doc, m, ctx, type) {
   const applyQty = () => { if (unitKcal != null) kcal.value = Math.round(unitKcal * qty); qtyIn.value = fmtQty(qty); updateHint(); };
   // 후보·프리셋에서 고르면 그 값이 1개 기준이 되고 수량은 1로
   const setUnit = (k, s) => { unitKcal = k ?? null; serving = s ?? null; qty = 1; applyQty(); };
-  qtyIn.addEventListener('input', () => { const v = numOr(qtyIn.value); if (v != null && v > 0) { qty = v; if (unitKcal != null) kcal.value = Math.round(unitKcal * qty); updateHint(); } });
+  qtyIn.addEventListener('input', () => { const v = parseQty(qtyIn.value); if (v != null) { qty = v; if (unitKcal != null) kcal.value = Math.round(unitKcal * qty); updateHint(); } });
+  qtyIn.addEventListener('blur', () => { qtyIn.value = fmtQty(qty); });
   // 칼로리를 직접 고치면 그 값을 현재 수량 기준으로 다시 1개 칼로리를 잡는다
   kcal.addEventListener('input', () => { const v = numOr(kcal.value); unitKcal = v != null && qty > 0 ? v / qty : null; updateHint(); });
   updateHint();
@@ -520,10 +530,13 @@ function mealSheet(doc, m, ctx, type) {
         suggest,
         h('div', { class: 'qty-row' },
           h('span', { class: 'muted small' }, '수량'),
-          h('button', { class: 'qty-btn', 'aria-label': '수량 줄이기', onclick: () => { qty = Math.max(0.5, Math.round((qty - 0.5) * 100) / 100); applyQty(); } }, '−'),
+          h('button', { class: 'qty-btn', 'aria-label': '수량 줄이기', onclick: () => { qty = Math.max(0.25, Math.round((qty - 0.5) * 1e6) / 1e6); applyQty(); } }, '−'),
           qtyIn,
-          h('button', { class: 'qty-btn', 'aria-label': '수량 늘리기', onclick: () => { qty = Math.round((qty + 0.5) * 100) / 100; applyQty(); } }, '+'),
+          h('button', { class: 'qty-btn', 'aria-label': '수량 늘리기', onclick: () => { qty = Math.round((qty + 0.5) * 1e6) / 1e6; applyQty(); } }, '+'),
           qtyHint),
+        h('div', { class: 'qty-fracs' },
+          [['¼', 1 / 4], ['⅓', 1 / 3], ['½', 1 / 2], ['⅔', 2 / 3], ['¾', 3 / 4], ['1', 1], ['1½', 1.5], ['2', 2]].map(([t, v]) =>
+            h('button', { class: 'chip sm', onclick: () => { qty = v; applyQty(); } }, t))),
         h('div', { class: 'muted small', style: 'margin-bottom:10px' }, '이름을 치면 칼로리 후보가 떠요. ★는 내가 전에 기록한 것. 계란 반 개는 0.5, 세 개는 3'),
         h('div', { class: 'field' }, h('label', null, '포만감'), satRow),
         field('메모', note),
@@ -588,12 +601,21 @@ function tagsSection(doc, m, ctx) {
 }
 
 // ---------- 하루평가 ----------
+// 메모는 칸을 벗어날 때(또는 앱이 뒤로 갈 때) 저장한다.
+// 치는 중에 저장하면 화면 전체가 다시 그려져 키보드가 닫히기 때문
+let flushNote = null;
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') flushNote?.(); });
 function ratingSection(doc, ctx) {
-  let timer;
-  const note = h('textarea', { class: 'input', placeholder: '한 줄 메모 (선택)', oninput: (e) => {
-    clearTimeout(timer);
-    timer = setTimeout(() => updateDay(ctx.day, (d) => { d.note = e.target.value; }), 600);
-  } }, doc.note ?? '');
+  const day = ctx.day;
+  const save = () => {
+    flushNote = null;
+    const v = note.value;
+    if (v !== (doc.note ?? '')) updateDay(day, (d) => { d.note = v; });
+  };
+  const note = h('textarea', { class: 'input', placeholder: '한 줄 메모 (선택)',
+    oninput: () => { flushNote = save; },
+    onblur: save,
+  }, doc.note ?? '');
   return h('div', { class: 'card' },
     h('div', { class: 'card-title' }, h('span', null, '🌈 오늘은 어땠나요?')),
     h('div', { class: 'faces', style: 'margin-bottom:10px' },

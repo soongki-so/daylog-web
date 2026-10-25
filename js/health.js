@@ -86,17 +86,17 @@ export function parseHealthText(text) {
   return days.filter((d) => d.steps != null || d.active != null || d.resting != null || d.weight != null || d.sleepMinutes != null || d.sleepStart || d.workouts.length);
 }
 
-// 손으로 넣은 값은 유지, 건강 앱 값은 비어 있거나 이전 건강 앱 값일 때만 채움
+// 손으로 넣은 값은 유지, 건강 앱 값은 비어 있거나 이전 건강 앱 값일 때만 채움 (에너지는 예외: 항상 가져온 값)
 export async function importHealthDays(rows) {
   let count = 0;
   const summary = [];
   for (const r of rows) {
     await updateDay(r.day, (d) => {
       if (r.steps != null) d.steps = r.steps;
+      // 에너지는 단축어로 가져오는 게 가장 정확해서, 전에 손으로 넣은 값이 있어도 가져온 값으로 바꾼다
+      // (가져온 줄에 없는 값만 기존 값을 유지)
       if (r.active != null || r.resting != null) {
-        if (!d.energy || d.energy.source === 'health') {
-          d.energy = { resting: r.resting ?? d.energy?.resting ?? null, active: r.active ?? d.energy?.active ?? null, source: 'health' };
-        }
+        d.energy = { resting: r.resting ?? d.energy?.resting ?? null, active: r.active ?? d.energy?.active ?? null, source: 'health' };
       }
       if ((r.sleepStart?.hm && r.sleepEnd?.hm) || r.sleepMinutes) {
         if (!d.sleep || d.sleep.source === 'health') {

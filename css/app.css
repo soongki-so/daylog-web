@@ -128,6 +128,8 @@ hr.sep { border: 0; border-top: 1px solid var(--line); margin: 12px 0; }
 .qty-row { display: flex; align-items: center; gap: 6px; margin: 6px 0 4px; }
 .qty-btn { width: 34px; height: 34px; border-radius: 10px; background: #F4F0EA; font-size: 18px; font-weight: 700; flex: none; }
 .input.qty-in { width: 64px; text-align: center; padding: 7px 4px; flex: none; }
+.qty-fracs { display: flex; flex-wrap: wrap; gap: 6px; margin: 2px 0 6px; }
+.qty-fracs .chip { min-width: 40px; padding: 5px 10px; font-size: 15px; justify-content: center; }
 /* 운동 칸: 미리 넣어 둔 수업 일정의 참석/불참 체크 */
 .ev-check { margin-top: 6px; padding-top: 6px; border-top: 1px dashed rgba(60,40,20,0.12); display: flex; flex-direction: column; gap: 4px; }
 .ev-btn { padding: 4px 8px; border-radius: 8px; background: #EEEAE4; font-size: 11px; font-weight: 700; color: #5C554D; flex: none; }
