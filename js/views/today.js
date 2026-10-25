@@ -535,7 +535,7 @@ function mealSheet(doc, m, ctx, type) {
           h('button', { class: 'qty-btn', 'aria-label': '수량 늘리기', onclick: () => { qty = Math.round((qty + 0.5) * 1e6) / 1e6; applyQty(); } }, '+'),
           qtyHint),
         h('div', { class: 'qty-fracs' },
-          [['¼', 1 / 4], ['⅓', 1 / 3], ['½', 1 / 2], ['⅔', 2 / 3], ['¾', 3 / 4], ['1', 1], ['1½', 1.5], ['2', 2]].map(([t, v]) =>
+          [['¼', 1 / 4], ['⅓', 1 / 3], ['½', 1 / 2], ['⅔', 2 / 3], ['¾', 3 / 4], ['1', 1]].map(([t, v]) =>
             h('button', { class: 'chip sm', onclick: () => { qty = v; applyQty(); } }, t))),
         h('div', { class: 'muted small', style: 'margin-bottom:10px' }, '이름을 치면 칼로리 후보가 떠요. ★는 내가 전에 기록한 것. 계란 반 개는 0.5, 세 개는 3'),
         h('div', { class: 'field' }, h('label', null, '포만감'), satRow),

@@ -1,4 +1,4 @@
-// 캐릭터 탭: 시작·지금·목표 세 모습, 기록 통계, 꾸미기, 해금 선반, 몸 정보(키·시작·목표 체중) 시트
+// 캐릭터 탭: 시작·지금·목표 세 모습, 기록 통계, 꾸미기·해금 선반 창, 몸 정보(키·시작·목표 체중) 시트
 import { h, openSheet, toast, field, input, select, numOr } from '../ui.js';
 import { getMasters, updateMasters } from '../store.js';
 import { fmtKey } from '../date.js';
@@ -7,16 +7,35 @@ import { W, H, drawAvatar, scene, ITEMS, KINDS, HAIRS, HAIR_COLORS, SHIRT_COLORS
 export async function renderAvatar(root, ctx) {
   const m = await getMasters();
   const sc = await avatarScene(m);
+  const open = ITEMS.filter((it) => unlockState(it, sc.stats).ok).length;
+  // 화면에는 캐릭터와 기록 숫자만, 꾸미기·해금 선반은 버튼을 누르면 뜨는 창에서
   root.replaceChildren(
     h('div', { class: 'cal-head' },
-      h('button', { class: 'icon-btn', onclick: () => ctx.goTab('today'), 'aria-label': '오늘로' }, '‹'),
+      h('button', { class: 'icon-btn av-back', onclick: () => ctx.goTab('today'), 'aria-label': '오늘로' }, '‹'),
       h('h1', null, '내 캐릭터'),
       h('button', { class: 'icon-btn', onclick: () => bodySheet(m, sc), 'aria-label': '몸 정보', title: '키 · 시작 · 목표 체중' }, '📏')),
     stageCard(sc, m),
+    h('button', { class: 'btn block av-dress-btn', onclick: dressSheet },
+      h('span', null, '🎨 꾸미기 · 🎁 선반'), h('span', { class: 'av-dress-count' }, `${open}/${ITEMS.length} 열림`)),
     statsCard(sc),
-    styleCard(sc),
-    shelfCard(sc),
   );
+}
+
+// ---------- 꾸미기 창 (꾸미기 + 해금 선반, 위에 미리보기) ----------
+function dressSheet() {
+  openSheet({
+    title: '🎨 꾸미기',
+    render: async (sh) => {
+      const sc = await avatarScene(await getMasters());
+      const set = async (patch) => { await updateMasters((mm) => { mm.avatar = { ...lookOf(mm), ...patch }; }); sh.refresh(); };
+      const cv = mkCanvas(4);
+      drawAvatar(cv, { ...sc.look, ...sc.b.now, mood: 'happy' }, sc.look.bg);
+      return h('div', null,
+        h('div', { class: 'av-preview' }, cv),
+        styleCard(sc, set),
+        shelfCard(sc, set));
+    },
+  });
 }
 
 const kgText = (v) => (v != null ? `${Number(v).toFixed(1)}kg` : '—');
@@ -47,7 +66,7 @@ function stageCard(sc, m) {
       h('div', { class: 'av-fig now', onclick: jump }, wrap, h('div', { class: 'cap' }, 'NOW', h('b', null, kgText(sc.now)))),
       h('div', { class: 'av-fig side goal' }, cvGoal, h('div', { class: 'cap' }, 'GOAL', h('b', null, sc.goal != null ? kgText(sc.goal) : '?')))),
     progressBlock,
-    h('div', { class: 'muted small', style: 'text-align:center;margin-top:8px' }, '캐릭터를 누르면 폴짝. 체중·인바디를 저장할 때마다 몸이 바뀌어요.'));
+    h('div', { class: 'muted small av-stage-tip', style: 'text-align:center;margin-top:8px' }, '캐릭터를 누르면 폴짝. 체중·인바디를 저장할 때마다 몸이 바뀌어요.'));
 }
 
 // ---------- 기록 통계 (해금 조건이 되는 숫자들) ----------
@@ -63,15 +82,14 @@ function statsCard(sc) {
 }
 
 // ---------- 꾸미기 ----------
-function styleCard(sc) {
+function styleCard(sc, set) {
   const look = sc.look;
-  const set = (patch) => updateMasters((mm) => { mm.avatar = { ...lookOf(mm), ...patch }; });
   const chips = (list, cur, onPick) => h('div', { class: 'chips' }, list.map(([v, label]) => h('button', { class: 'chip' + (cur === v ? ' on' : ''), onclick: () => onPick(v) }, label)));
   const swatches = (list, cur, onPick, bgOf = (v) => v) => h('div', { class: 'chips' }, list.map(([v, label]) =>
     h('button', { class: 'av-sw' + (String(cur) === String(v) ? ' on' : ''), style: `background:${bgOf(v)}`, 'aria-label': label, title: label, onclick: () => onPick(v) })));
   const opt = (k, body) => h('div', { class: 'field', style: 'margin-bottom:10px' }, h('label', null, k), body);
-  return h('div', { class: 'card' },
-    h('div', { class: 'card-title' }, h('span', null, '🎨 꾸미기')),
+  return h('div', { class: 'av-section' },
+    h('div', { class: 'card-title' }, h('span', null, '기본 모습')),
     opt('성별', chips([['f', '여'], ['m', '남']], look.sex, (v) => set({ sex: v, hair: HAIRS[v][0][0], outfit: v === 'm' && look.outfit === 'dress' ? 'tee' : look.outfit, shirt: v === 'f' ? '#F07A8F' : '#6FA8DC' }))),
     opt('머리', chips(HAIRS[look.sex] ?? HAIRS.f, look.hair, (v) => set({ hair: v }))),
     opt('머리색', swatches(HAIR_COLORS, look.hairColor, (v) => set({ hairColor: v }))),
@@ -85,11 +103,10 @@ function haveText(u, type) {
   if (u.have == null) return '';
   return type === 'progress' ? ` · 지금 ${u.have}%` : ` · 지금 ${u.have}`;
 }
-function shelfCard(sc) {
+function shelfCard(sc, set) {
   const look = sc.look, stats = sc.stats;
-  const set = (patch) => updateMasters((mm) => { mm.avatar = { ...lookOf(mm), ...patch }; });
   const open = ITEMS.filter((it) => unlockState(it, stats).ok).length;
-  return h('div', { class: 'card' },
+  return h('div', { class: 'av-section' },
     h('div', { class: 'card-title' }, h('span', null, '🎁 해금 선반'), h('span', null, `${open}/${ITEMS.length} 열림`)),
     h('div', { class: 'muted small', style: 'margin:-4px 0 4px' }, '기록이 쌓이면 하나씩 열려요. 잠긴 걸 누르면 조건이 보여요.'),
     KINDS.map(([kind, label]) => [

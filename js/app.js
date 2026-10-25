@@ -22,7 +22,7 @@ const ctx = {
 
 const views = { today: renderToday, calendar: renderCalendar, trends: renderTrends, settings: renderSettings, avatar: renderAvatar };
 
-// 넓은 화면(컴퓨터·아이패드 가로)에서는 오늘 · 달력 · 변화를 나란히 보여 준다
+// 넓은 화면(컴퓨터·아이패드 가로)에서는 오늘 · 달력 · 변화 · 캐릭터를 나란히 보여 준다
 const wideMQ = window.matchMedia('(min-width: 1100px)');
 let cols = null;
 function ensureLayout() {
@@ -30,8 +30,8 @@ function ensureLayout() {
   document.getElementById('app').classList.toggle('wide', wide);
   if (wide && !cols) {
     const mk = (name) => { const el = document.createElement('section'); el.className = `col col-${name}`; return el; };
-    cols = { main: mk('main'), cal: mk('cal'), trends: mk('trends') };
-    view.replaceChildren(cols.main, cols.cal, cols.trends);
+    cols = { main: mk('main'), cal: mk('cal'), trends: mk('trends'), avatar: mk('avatar') };
+    view.replaceChildren(cols.main, cols.cal, cols.trends, cols.avatar);
   } else if (!wide && cols) {
     cols = null;
     view.replaceChildren();
@@ -46,11 +46,13 @@ async function render() {
   try {
     tabsEl.querySelectorAll('.tab').forEach((b) => b.classList.toggle('active', b.dataset.tab === state.tab));
     if (ensureLayout()) {
-      const tops = [cols.main.scrollTop, cols.cal.scrollTop, cols.trends.scrollTop];
-      await views[state.tab === 'settings' || state.tab === 'avatar' ? state.tab : 'today'](cols.main, ctx);
+      const all = [cols.main, cols.cal, cols.trends, cols.avatar];
+      const tops = all.map((c) => c.scrollTop);
+      await views[state.tab === 'settings' ? 'settings' : 'today'](cols.main, ctx);
       await renderCalendar(cols.cal, ctx);
       await renderTrends(cols.trends, ctx);
-      [cols.main.scrollTop, cols.cal.scrollTop, cols.trends.scrollTop] = tops;
+      await renderAvatar(cols.avatar, ctx);
+      all.forEach((c, i) => { c.scrollTop = tops[i]; });
     } else {
       const y = window.scrollY;
       await views[state.tab](view, ctx);
