@@ -292,7 +292,7 @@ function healthCard() {
   const card = h('div', { class: 'card' });
   const render = () => card.replaceChildren(
     h('div', { class: 'card-title' }, h('span', null, '🍎 아이폰 건강 앱 연동')),
-    h('div', { class: 'muted small', style: 'margin-bottom:10px' }, '아이폰 "단축어" 앱으로 건강 앱의 걸음·활동/안정시 에너지·수면·운동·체중을 복사한 뒤, 여기서 가져와요. 직접 입력한 값은 그대로 두고 빈 값만 채웁니다. 오늘 화면의 🍎 버튼도 같은 기능이에요.'),
+    h('div', { class: 'muted small', style: 'margin-bottom:10px' }, '아이폰 "단축어" 앱으로 건강 앱의 걸음·활동/안정시 에너지·수면·운동·체중을 복사한 뒤, 여기서 가져와요. 직접 입력한 값은 그대로 두고 빈 값만 채웁니다. 단, 안정시·활동 에너지는 가져올 때마다 건강 앱 값으로 바뀌어요. 오늘 화면의 🍎 버튼도 같은 기능이에요.'),
     h('button', { class: 'btn block', style: 'margin-bottom:8px', onclick: () => healthImportAction() }, '🍎 클립보드에서 건강 데이터 가져오기'),
     paste,
     h('button', { class: 'btn secondary block', style: 'margin:8px 0 12px', onclick: async () => {

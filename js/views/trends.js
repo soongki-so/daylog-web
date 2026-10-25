@@ -49,7 +49,7 @@ export async function renderTrends(root, ctx) {
 
   const avg = (arr) => { const v = arr.filter((x) => x != null); return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null; };
 
-  root.replaceChildren(
+  root.replaceChildren(...[ // 조건부 카드(false)는 빼고 넣는다 — 그대로 넣으면 "false" 글자가 찍힘
     h('div', { class: 'cal-head' }, h('h1', null, '변화')),
     h('div', { class: 'periods' }, PERIODS.map((x) => h('button', { class: x.key === state.period ? 'on' : '', onclick: () => { state.period = x.key; ctx.goTab('trends'); } }, x.label))),
 
@@ -93,7 +93,7 @@ export async function renderTrends(root, ctx) {
       ['평균', avg(water) ? `${Math.round(avg(water))} ml` : '-'],
       ['목표 달성', `${water.filter((v) => v >= m.settings.waterGoalMl).length}일`],
     ], barChart({ labels, values: water, color: (v) => (v >= m.settings.waterGoalMl ? '#6FA8DC' : '#B9D6EE'), hline: { value: m.settings.waterGoalMl, label: '목표', color: '#6FA8DC' } })),
-  );
+  ].filter(Boolean));
 }
 
 function chartCard(title, stats, chart, caption) {
