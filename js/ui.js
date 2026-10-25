@@ -73,13 +73,17 @@ export function toast(msg) {
   toastTimer = setTimeout(() => root.replaceChildren(), 1800);
 }
 
-export function ring({ value, max, color = 'var(--accent)', track = '#F1ECE5', stroke = 12 }) {
-  const size = 132, r = (size - stroke) / 2, c = 2 * Math.PI * r;
-  const ratio = max > 0 ? Math.min(value / max, 1) : 0;
-  return svg('svg', { viewBox: `0 0 ${size} ${size}` },
-    svg('circle', { cx: size / 2, cy: size / 2, r, fill: 'none', stroke: track, 'stroke-width': stroke }),
-    svg('circle', { cx: size / 2, cy: size / 2, r, fill: 'none', stroke: color, 'stroke-width': stroke,
-      'stroke-linecap': 'round', 'stroke-dasharray': c, 'stroke-dashoffset': c * (1 - ratio) }));
+// 여러 겹 고리 (바깥부터). list: [{ ratio 0~1, color }]
+export function rings(list, { size = 156, stroke = 10, gap = 3, track = '#F1ECE5' } = {}) {
+  return svg('svg', { viewBox: `0 0 ${size} ${size}` }, list.map((x, i) => {
+    const r = size / 2 - stroke / 2 - i * (stroke + gap), c = 2 * Math.PI * r;
+    const ratio = Math.max(0, Math.min(1, x.ratio || 0));
+    return [
+      svg('circle', { cx: size / 2, cy: size / 2, r, fill: 'none', stroke: track, 'stroke-width': stroke }),
+      ratio > 0 && svg('circle', { cx: size / 2, cy: size / 2, r, fill: 'none', stroke: x.color, 'stroke-width': stroke,
+        'stroke-linecap': 'round', 'stroke-dasharray': c, 'stroke-dashoffset': c * (1 - ratio) }),
+    ].filter(Boolean);
+  }));
 }
 
 export const fmtKcal = (n) => (n == null ? '-' : Math.round(n).toLocaleString('ko-KR'));

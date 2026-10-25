@@ -1,11 +1,12 @@
 // 오늘 화면: 통합 대시보드 → 식사 → 약·영양제 → 특이사항 → 하루평가 (투약은 달력에서)
-import { h, openSheet, toast, ring, fmtKcal, numOr, field, input, select, inbodyCsvPicker, healthImportAction } from '../ui.js';
+import { h, openSheet, toast, rings, fmtKcal, numOr, field, input, select, inbodyCsvPicker, healthImportAction } from '../ui.js';
 import { getDay, updateDay, getMasters, getDaysInRange, uid } from '../store.js';
 import { fmtKey, addDays, todayKey, nowHM, minutesToText, sleepMinutes } from '../date.js';
 import { MEAL_TYPES, SATIETY, RATINGS, EXERCISE_TYPES } from '../defaults.js';
 import { slotGroups, setsForSlot, pieFor, setRow, medsSheet } from '../meds.js';
 import { searchFoods, loadOfficialFoods, foodIcon } from '../foods.js';
 import { getAllDays } from '../store.js';
+import { completeness, completenessText, goalProgress, goalText } from '../complete.js';
 import { syncEnabled, getSession, getStatus, syncNow } from '../sync.js';
 import { guidanceFor, daySheet, plannedClassEvents, ensureClassExercise, setEventStatus, markClassEventDone } from '../events.js';
 import { activeClasses, classById, classIdOf, classProgress, progressText } from '../classes.js';
@@ -112,15 +113,24 @@ function dashboard(doc, m, ctx, prevWeight, ptInfo) {
 
   const weightDelta = doc.weight?.kg && prevWeight ? doc.weight.kg - prevWeight.weight.kg : null;
 
+  // 고리 3겹: 바깥 초록 = 기록했나, 가운데 파랑 = 목표 달성 (달력과 같은 기준), 안쪽 = 섭취 / 소모
+  const comp = completeness(doc, m), goal = goalProgress(doc, m);
   const ringCell = h('div', { class: 'ring-cell', onclick: () => energySheet(doc, m, ctx) },
     h('div', { class: 'ring-wrap' },
-      ring({ value: e.intake, max: e.expenditure, color: e.balance > 0 ? 'var(--accent)' : 'var(--mint)' }),
+      rings([
+        { ratio: comp.ratio, color: 'var(--mint)' },
+        { ratio: goal.ratio, color: 'var(--sky)' },
+        { ratio: e.expenditure > 0 ? e.intake / e.expenditure : 0, color: e.balance > 0 ? 'var(--accent)' : '#F5B84D' },
+      ]),
       h('div', { class: 'ring-center' },
         h('div', { class: 'big' }, (e.balance > 0 ? '+' : '') + fmtKcal(e.balance)),
         h('div', { class: 'lbl' }, '에너지 밸런스'))),
     h('div', { class: 'ring-legend' },
       h('span', null, '섭취 ', h('b', null, fmtKcal(e.intake))),
-      h('span', null, '소모 ', h('b', null, fmtKcal(e.expenditure)))));
+      h('span', null, '소모 ', h('b', null, fmtKcal(e.expenditure)))),
+    h('div', { class: 'ring-legend', title: completenessText(comp) + '\n' + goalText(goal) },
+      h('span', null, h('span', { class: 'legend-ring' }), ' 기록 ', h('b', null, `${comp.filled}/${comp.total}`)),
+      h('span', null, h('span', { class: 'legend-ring goal' }), ' 목표 ', h('b', null, `${goal.pct}%`))));
 
   const weightCell = h('div', { class: 'stat', onclick: () => weightSheet(doc, ctx) },
     h('div', { class: 'k' }, '⚖️ 체중'),

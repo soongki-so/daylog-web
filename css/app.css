@@ -91,12 +91,12 @@ hr.sep { border: 0; border-top: 1px solid var(--line); margin: 12px 0; }
 .stat .v small { font-size: 12px; font-weight: 500; color: var(--muted); margin-left: 2px; }
 .stat .d { font-size: 11px; color: var(--muted); }
 .stat .d.up { color: var(--danger); } .stat .d.down { color: var(--mint); }
-.ring-wrap { position: relative; width: 132px; height: 132px; }
+.ring-wrap { position: relative; width: min(156px, 100%); aspect-ratio: 1; }
 .ring-wrap svg { width: 100%; height: 100%; transform: rotate(-90deg); }
 .ring-center { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
-.ring-center .big { font-size: 22px; font-weight: 800; line-height: 1; }
+.ring-center .big { font-size: 20px; font-weight: 800; line-height: 1; }
 .ring-center .lbl { font-size: 11px; color: var(--muted); margin-top: 4px; }
-.ring-legend { display: flex; gap: 10px; margin-top: 8px; font-size: 11px; color: var(--muted); }
+.ring-legend { display: flex; align-items: center; gap: 10px; margin-top: 6px; font-size: 11px; color: var(--muted); }
 .ring-legend b { color: var(--ink); }
 .water-bar { height: 8px; border-radius: 99px; background: var(--sky-soft); overflow: hidden; margin: 6px 0; }
 .water-bar > div { height: 100%; background: var(--sky); border-radius: 99px; transition: width .3s; }
